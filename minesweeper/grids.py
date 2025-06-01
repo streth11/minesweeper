@@ -92,13 +92,15 @@ class GridElement():
 
 
 class Grid():
-    gridElements = []
+    isInstantiated = False
     def __init__(self, nX: int, nY: int):
         self.nX = nX
         self.nY = nY
         self.n = self.nX * self.nY
         
     def instantiateGrid(self, GridElemType=GridElement, *args):
+        if self.isInstantiated:
+            return self.grid
         self.grid = np.empty((self.nX, self.nY), dtype=object)
         
         for i in range(self.nX):
@@ -117,6 +119,8 @@ class Grid():
         for i in range(self.nX):
             for j in range(self.nY):
                 self.grid[i,j].getSurrounding()
+        self.isInstantiated = True
+        return self.grid
 
     def __getitem__(self, key):
         if isinstance(key,tuple):
