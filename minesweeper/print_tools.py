@@ -1,29 +1,5 @@
 from enum import Enum
 
-def ansi_demo():
-    foregrounds = {
-        "Black": 30, "Red": 31, "Green": 32, "Yellow": 33,
-        "Blue": 34, "Magenta": 35, "Cyan": 36, "White": 37,
-        "Bright Black": 90, "Bright Red": 91, "Bright Green": 92, "Bright Yellow": 93,
-        "Bright Blue": 94, "Bright Magenta": 95, "Bright Cyan": 96, "Bright White": 97
-    }
-
-    backgrounds = {
-        "Black": 40, "Red": 41, "Green": 42, "Yellow": 43,
-        "Blue": 44, "Magenta": 45, "Cyan": 46, "White": 47,
-        "Bright Black": 100, "Bright Red": 101, "Bright Green": 102, "Bright Yellow": 103,
-        "Bright Blue": 104, "Bright Magenta": 105, "Bright Cyan": 106, "Bright White": 107
-    }
-
-    print("ANSI Color Chart (FG on BG):\n")
-    for bg_name, bg_code in backgrounds.items():
-        print(f" BG: {bg_name.ljust(15)} ", end="")
-        for fg_name, fg_code in list(foregrounds.items()):  # use only base 8 FG for readability
-            print(f"\033[1;{fg_code};{bg_code}m {fg_name[0]} \033[0m", end=" ")
-        print()
-
-# ansi_demo()
-
 COL_MAP = {
     "black":   [0, 0, 0],
     "red":     [255, 0, 0],
@@ -58,7 +34,7 @@ class PrintMode(Enum):
     RevealMines = 1
     RevealAll = 2
 
-def print_styled(text: str, bold: bool = False, fg_rgb: list = None, bg_rgb: list = None):
+def print_styled(text: str, bold: bool = False, fg_rgb: list = None, bg_rgb: list = None, doPrint = False):
     """
     Print text with optional bold style and optional RGB foreground/background colors.
 
@@ -87,10 +63,14 @@ def print_styled(text: str, bold: bool = False, fg_rgb: list = None, bg_rgb: lis
 
     # Build and print the escape sequence
     escape_seq = f"\033[{';'.join(codes)}m{text}\033[0m"
-    print(escape_seq)
 
-for c in COL_MAP:
+    if doPrint:
+        print(escape_seq)
+    return escape_seq
 
-    print_styled("abc",bold=True,fg_rgb=COL_MAP[c])
+
+if __name__ == "__main__":
+    for c in COL_MAP:
+        print_styled("abc",bold=True,fg_rgb=COL_MAP[c])
 
 

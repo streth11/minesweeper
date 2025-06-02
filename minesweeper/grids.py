@@ -99,6 +99,7 @@ class Grid():
         self.n = self.nX * self.nY
         
     def instantiateGrid(self, GridElemType=GridElement, *args):
+        """Instantiates the grid with GridElemType elements."""
         if self.isInstantiated:
             return self.grid
         self.grid = np.empty((self.nX, self.nY), dtype=object)
@@ -123,6 +124,7 @@ class Grid():
         return self.grid
 
     def __getitem__(self, key):
+        """Returns the grid element at the specified key."""
         if isinstance(key,tuple):
             if len(key) != 2:
                 raise ValueError()
@@ -134,18 +136,8 @@ class Grid():
             return self.grid[x,y]
         return self.grid
 
-    def print(self):
+    def print(self, *args):
         """Prints the grid values with grid lines and colored output."""
-        # ANSI color codes
-        colors = {
-            '1': '\033[94m',   # Blue
-            '2': '\033[92m',   # Green
-            '3': '\033[91m',   # Red
-            '4': '\033[95m',   # Magenta
-            '5': '\033[96m',   # Cyan
-        }
-        reset = '\033[0m'
-
         cell_width = 3
         horizontal = "+" + ("-" * cell_width + "+") * self.nX
 
@@ -153,12 +145,16 @@ class Grid():
             print(horizontal)
             row = "|"
             for x in range(self.nX):
-                val = str(self[x, y].value)
-                color = colors.get(val, "")
-                colored_val = f" {color}{val}{reset} "
-                row += colored_val.center(cell_width) + "|"
+                cell = self.getCellFormat(self.grid[x,y], *args)
+                row += cell.center(cell_width) + "|"
             print(row)
         print(horizontal)
+
+    def getCellFormat(self, cell:GridElement) -> str:
+        """Returns the format string for a cell at (x, y)."""
+        val = "X"
+        return f" {val} "
+
 
 
 if __name__ == "__main__":
