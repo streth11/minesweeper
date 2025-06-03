@@ -1,5 +1,6 @@
 import numpy as np
 
+from enum import Enum
 from grids import GridElement, Grid
 from print_tools import PrintMode, TXT_COL, COL_MAP, print_styled
 
@@ -36,29 +37,47 @@ class MSGridElement(GridElement):
         """Count the number of flagged neighbors."""
         return sum(1 for neighbor in self.surround if not neighbor.isEdge and neighbor.flagged)
 
+class MSGridState(Enum):
+    UNINITIALIZED = 0
+    INIT = 1
+    IN_PROGRESS = 2
+    SOLVED = 3
+    FAILED = 4
 
 class MSGrid(Grid):
     nMines = 0
 
-    def __init__(self, nX, nY, seed=1234):
+    def __init__(self, nX, nY, seed=1234, nMines=1):
         super().__init__(nX, nY)
         self.seed = seed
         np.random.seed(seed)
-        self.mine_positions = set()
-
-    def instantiateGrid(self, nMines, *args):
-        """Instantiate the grid with a given number of mines."""
-        super().instantiateGrid(MSGridElement, *args)
         self.nMines = nMines
+        self.mine_positions = set()
+        self.state = MSGridState.UNINITIALIZED
 
-        self.mine_positions.clear()
+    def instantiateGrid(self, *args):
+        """Instantiate the grid with a given number of mines."""
+        if self.state == MSGridState.FAILED or self.state == MSGridState.SOLVED:
+            self.state = MSGridState.UNINITIALIZED
+        if self.state != MSGridState.UNINITIALIZED:
+            raise ValueError("Cannot re-instantiate in current state.")
+        super().instantiateGrid(MSGridElement, *args)
+        self.state = MSGridState.INIT
+
         self.randomizeMines()
+        self.state = MSGridState.IN_PROGRESS
 
     def randomizeMines(self):
         """Randomly place mines in the grid."""
+        if self.state != MSGridState.INIT:
+            raise ValueError("Grid must be in INIT state to randomize mines.")
+        
+        if self.nMines < 0:
+            raise ValueError("Number of mines cannot be negative.")
         if self.nMines > self.nX * self.nY:
             raise ValueError("Number of mines exceeds grid size.")
         
+        self.mine_positions.clear()
         while len(self.mine_positions) < self.nMines:
             x = np.random.randint(0, self.nX)
             y = np.random.randint(0, self.nY)
@@ -78,8 +97,11 @@ class MSGrid(Grid):
         if self[x, y].revealed:
             return 0
         if self[x, y].is_mine:
+            self.state = MSGridState.FAILED
             return -1
         self[x, y].runRecursiveReveal()
+        if self.numMinesRemaining(truth=True) == 0:
+            self.state = MSGridState.SOLVED
         return 1
 
     def flagCell(self, x, y):
@@ -103,6 +125,18 @@ class MSGrid(Grid):
             return self.nMines - sum(cell.flagged and cell.is_mine for row in self.grid for cell in row)
         else:
             return self.nMines - sum(cell.flagged for row in self.grid for cell in row)
+
+    @property
+    def numFlaggedCells(self):
+        return sum(cell.flagged for row in self.grid for cell in row)
+    
+    @property
+    def numTouchedCells(self):
+        return sum(cell.touched for row in self.grid for cell in row)
+    
+    @property
+    def numRevealedCells(self):
+        return sum(cell.revealed for row in self.grid for cell in row)
 
     def untouchedFrontier(self):
         """Returns a list of cells that are not revealed or flagged."""
@@ -156,8 +190,8 @@ class MSGrid(Grid):
 
 if __name__ == "__main__":
     # Example usage
-    grid = MSGrid(20, 8)
-    grid.instantiateGrid(40)
+    grid = MSGrid(20, 8, nMines=40)
+    grid.instantiateGrid()
     
     # Print the formatted cell
     grid.print(PrintMode.RevealAll)
