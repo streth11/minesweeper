@@ -29,6 +29,11 @@ class GridElement():
             self._southEast()
         ]
 
+    @property
+    def location(self):
+        """Returns the (x, y) location of this element."""
+        return (self.x, self.y)
+
     def _east(self):
         if self.edgeENWS[0]:
             return EdgeElement(self.parent)
@@ -150,6 +155,10 @@ class Grid():
         """Returns the format string for a cell at (x, y)."""
         val = "X"
         return f" {val} "
+    
+    def flat(self):
+        """Returns a flattened view of the grid."""
+        return self.grid.flatten()
 
 
 

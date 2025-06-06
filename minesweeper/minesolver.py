@@ -1,7 +1,7 @@
 import numpy as np
 from enum import Enum
-from minegrids import MSGrid, MSGridElement, MSGridState
-
+from minegrids import MSGrid, MSGridState
+from print_tools import PrintMode
 
 class MineSolverState(Enum):
     START = 0
@@ -9,7 +9,7 @@ class MineSolverState(Enum):
     FRONTIER_PATTERN_SOLVE = 2
     RANDOM_GUESS = 3
 
-class MineSolver:
+class MineSolver():
     def __init__(self, grid: MSGrid):
         self.grid = grid
         self.nMines = grid.nMines
@@ -25,13 +25,13 @@ class MineSolver:
         game_over = 0
         while game_over == 0:
             game_over = self.solverIteration()
-            self.prev_touched_cells = self.iter_touched_cells
-            self.prev_mines_remaining = self.iter_mines_remaining
-            self.n_iterations += 1
         return game_over, self.n_iterations
 
     def solverIteration(self):
         self.state = self.runSolverStateMachine()
+        self.prev_touched_cells = self.iter_touched_cells
+        self.prev_mines_remaining = self.iter_mines_remaining
+        self.n_iterations += 1
         if self.grid.state == MSGridState.IN_PROGRESS:
             return 0
         elif self.grid.state == MSGridState.SOLVED:
@@ -98,7 +98,23 @@ class MineSolver:
         return self.grid.numTouchedCells, self.grid.numMinesRemaining()
 
     def frontierSimpleSolve(self, frontier_cells):
-        pass
+
+        for cell in frontier_cells:
+            if cell.value == cell.numFlaggedNeighbors():
+                for neighbor in cell.unrevealedUnflaggedNeighbors2():
+                    ret = self.grid.revealCell(neighbor.location)
+                    if ret == 1:
+                        self.grid.print(PrintMode.RevealMines)
+                    elif ret == -1:
+                        raise ValueError("Revealed a mine.")
+            
+            cell_temp_list = cell.unrevealedUnflaggedNeighbors()
+            if cell.value - cell.numFlaggedNeighbors() == sum(cell_temp_list):
+                for i, neighbor in enumerate(cell.surround):
+                    if cell_temp_list[i] == 1:
+                        self.grid.flagCell(neighbor.location)
+                        self.grid.print(PrintMode.RevealMines)
+        return 1
 
     def frontierPatternSolve(self):
         pass
@@ -106,12 +122,29 @@ class MineSolver:
     def randomGuess(self):
         pass
 
-    def startGuess(self):        
-        ret = self.grid.revealCell(0, 0)
+    def startGuess(self):
+        ret = self.grid.revealCell((0, 0))
         while self.grid.state == MSGridState.FAILED:
             # If the first guess is a mine, try again
             self.grid.instantiateGrid()
-            ret = self.grid.revealCell(0, 0)
+            ret = self.grid.revealCell((0, 0))
         if ret != 1:
             raise ValueError("Start guess did not succeed.")
         return 1
+    
+
+if __name__ == "__main__":
+    # Example usage
+    grid = MSGrid(20, 8, nMines=40)
+    grid.instantiateGrid()
+    solver = MineSolver(grid)
+    
+    # Print the formatted cell
+    # grid.print(PrintMode.RevealAll)
+    # print()
+    grid.print(PrintMode.RevealMines)
+    print()
+    solver.solverIteration()
+    grid.print(PrintMode.RevealMines)
+    solver.solverIteration()
+    solver.solverIteration()

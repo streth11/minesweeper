@@ -18,6 +18,7 @@ class MSGridElement(GridElement):
 
     def reveal(self):
         self.revealed = True
+        print(f"Revealed cell at ({self.x}, {self.y}).")
 
     def runRecursiveReveal(self):
         """Recursively reveal this cell and its neighbors if it has no mines around."""
@@ -31,11 +32,34 @@ class MSGridElement(GridElement):
 
     def hasRevealedNeighbors(self):
         """Check if any non-edge neighbor is revealed."""
-        return any(neighbor.touched for neighbor in self.surround if not neighbor.isEdge)
+        return any(
+            neighbor.touched for neighbor in self.surround if not neighbor.isEdge)
 
     def numFlaggedNeighbors(self):
         """Count the number of flagged neighbors."""
         return sum(1 for neighbor in self.surround if not neighbor.isEdge and neighbor.flagged)
+
+    def hasUnrevealedUnflaggedNeighbors(self):
+        """Return True if any neighbor is neither revealed nor flagged."""
+        return any(self.unrevealedUnflaggedNeighbors())
+    
+    def numUnrevealedUnflaggedNeighbors(self):
+        """Count the number of neighbors that are neither revealed nor flagged."""
+        return sum(self.unrevealedUnflaggedNeighbors())
+
+    def unrevealedUnflaggedNeighbors(self):
+        """Return a list of neighbors that are neither revealed nor flagged."""
+        return [
+            1 if not n.isEdge and not n.revealed and not n.flagged else 0
+            for n in self.surround
+        ]
+
+    def unrevealedUnflaggedNeighbors2(self):
+        """Return a list of neighbors that are neither revealed nor flagged."""
+        return [
+            n for n in self.surround
+            if not n.isEdge and not n.revealed and not n.flagged
+        ]
 
 class MSGridState(Enum):
     UNINITIALIZED = 0
@@ -89,9 +113,10 @@ class MSGrid(Grid):
                 if not neighbor.isEdge and not neighbor.is_mine:
                     neighbor.value += 1
 
-    def revealCell(self, x, y):
+    def revealCell(self, pos:tuple):
         """Reveal a cell at (x, y). 
            Returns 0 if already revealed, -1 if mine, 1 if successful."""
+        x, y = pos
         if x >= self.nX or y >= self.nY or x < 0 or y < 0:
             raise ValueError("Coordinates out of bounds.")
         if self[x, y].revealed:
@@ -104,14 +129,16 @@ class MSGrid(Grid):
             self.state = MSGridState.SOLVED
         return 1
 
-    def flagCell(self, x, y):
+    def flagCell(self, pos:tuple):
         """Toggle flag on a cell at (x, y).
            Returns 0 if already revealed, 1 if successful."""
+        x, y = pos
         if x >= self.nX or y >= self.nY or x < 0 or y < 0:
             raise ValueError("Coordinates out of bounds.")
         cell = self[x, y]
         if not cell.revealed:
             cell.flagged = not cell.flagged
+            print(f"Flagged cell at ({cell.x}, {cell.y}).")
             return 1
         return 0
 
@@ -138,9 +165,18 @@ class MSGrid(Grid):
     def numRevealedCells(self):
         return sum(cell.revealed for row in self.grid for cell in row)
 
-    def untouchedFrontier(self):
-        """Returns a list of cells that are not revealed or flagged."""
-        return [cell for row in self.grid for cell in row if not cell.touched]
+    def untouchedListFlattened(self):
+        """Returns a flattened list of untouched cells."""
+        return [cell for cell in self.grid.flat() if not cell.touched]
+
+    def revealedWithUnrevealedNeighbors(self):
+        return [
+            cell for cell in self.grid.flat
+            if cell.revealed and cell.hasUnrevealedUnflaggedNeighbors()
+        ]
+
+    def getFrontierCells(self):
+        return self.revealedWithUnrevealedNeighbors()
 
     def getCellFormat(self, cell:MSGridElement, print_mode:PrintMode=PrintMode.Normal):
         """Returns a formatted string for the cell based on the print mode."""
@@ -197,8 +233,8 @@ if __name__ == "__main__":
     grid.print(PrintMode.RevealAll)
     print()
     grid.print(PrintMode.Normal)
-    grid.revealCell(0, 0)
-    print(grid.flagCell(2, 3))
-    print(grid.flagCell(2, 4))
+    grid.revealCell((0, 0))
+    print(grid.flagCell((2, 3)))
+    print(grid.flagCell((2, 4)))
     grid.print()
     grid.print(PrintMode.RevealMines)
