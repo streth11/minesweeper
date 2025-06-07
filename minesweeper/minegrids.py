@@ -16,19 +16,25 @@ class MSGridElement(GridElement):
     def touched(self):
         return self.revealed or self.flagged
 
-    def reveal(self):
+    def reveal(self, debug=False):
         self.revealed = True
-        print(f"Revealed cell at ({self.x}, {self.y}).")
+        if debug:
+            print(f"Revealed cell at ({self.x}, {self.y}).")
 
-    def runRecursiveReveal(self):
+    def toggleFlag(self, debug=False):
+        self.flagged = not self.flagged
+        if debug:
+            print(f"Toggled flag on cell at ({self.x}, {self.y}).")
+
+    def runRecursiveReveal(self, debug=False):
         """Recursively reveal this cell and its neighbors if it has no mines around."""
         if self.revealed or self.is_mine or self.flagged:
             return
-        self.reveal()
+        self.reveal(debug=debug)
         if self.value == 0:
             for neighbor in self.surround:
                 if not neighbor.isEdge:
-                    neighbor.runRecursiveReveal()
+                    neighbor.runRecursiveReveal(debug=debug)
 
     def hasRevealedNeighbors(self):
         """Check if any non-edge neighbor is revealed."""
@@ -113,7 +119,7 @@ class MSGrid(Grid):
                 if not neighbor.isEdge and not neighbor.is_mine:
                     neighbor.value += 1
 
-    def revealCell(self, pos:tuple):
+    def revealCell(self, pos:tuple, debug=False):
         """Reveal a cell at (x, y). 
            Returns 0 if already revealed, -1 if mine, 1 if successful."""
         x, y = pos
@@ -124,12 +130,12 @@ class MSGrid(Grid):
         if self[x, y].is_mine:
             self.state = MSGridState.FAILED
             return -1
-        self[x, y].runRecursiveReveal()
+        self[x, y].runRecursiveReveal(debug=debug)
         if self.numMinesRemaining(truth=True) == 0:
             self.state = MSGridState.SOLVED
         return 1
 
-    def flagCell(self, pos:tuple):
+    def flagCell(self, pos:tuple, debug=False):
         """Toggle flag on a cell at (x, y).
            Returns 0 if already revealed, 1 if successful."""
         x, y = pos
@@ -137,8 +143,7 @@ class MSGrid(Grid):
             raise ValueError("Coordinates out of bounds.")
         cell = self[x, y]
         if not cell.revealed:
-            cell.flagged = not cell.flagged
-            print(f"Flagged cell at ({cell.x}, {cell.y}).")
+            cell.toggleFlag(debug=debug)
             return 1
         return 0
 

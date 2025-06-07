@@ -1,5 +1,12 @@
 import numpy as np
 
+class NeighbourList(list):
+    def __getitem__(self, key):
+        if key >= 8:
+            key = key % 8
+        return super().__getitem__(key)
+
+
 class EdgeElement():
     def __init__(self, parent, *args):
         self.parent = parent
@@ -18,7 +25,7 @@ class GridElement():
         self.value = x+y
 
     def getSurrounding(self):
-        self.surround = [
+        self.surround = NeighbourList((
             self._east(),
             self._northEast(),
             self._north(),
@@ -27,7 +34,7 @@ class GridElement():
             self._southWest(),
             self._south(),
             self._southEast()
-        ]
+        ))
 
     @property
     def location(self):
@@ -170,3 +177,9 @@ if __name__ == "__main__":
 
     x = g[1,1]
     print(g[1,1])
+
+    s = g[1,1].surround
+    print(s)
+    print(g[1,1].surround)
+    print(g[1,1].surround[0])
+    print(g[1,1].surround[9])

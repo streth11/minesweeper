@@ -30,6 +30,7 @@ TXT_COL = {
 }
 
 class PrintMode(Enum):
+    NoPrint = -1
     Normal = 0
     RevealMines = 1
     RevealAll = 2

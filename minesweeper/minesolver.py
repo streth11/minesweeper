@@ -8,12 +8,14 @@ class MineSolverState(Enum):
     FRONTIER_SIMPLE_SOLVE = 1
     FRONTIER_PATTERN_SOLVE = 2
     RANDOM_GUESS = 3
+    COMPLETE = 4
 
 class MineSolver():
-    def __init__(self, grid: MSGrid):
+    def __init__(self, grid: MSGrid, debug=False):
         self.grid = grid
         self.nMines = grid.nMines
-        
+        self.debug = debug
+
         self.iter_touched_cells, self.iter_mines_remaining = self.getCurrentGridState()
         self.prev_touched_cells = 0
         self.prev_mines_remaining = grid.nMines
@@ -21,10 +23,14 @@ class MineSolver():
         self.state = MineSolverState.START
         self.n_iterations = 0
 
-    def solve(self):
+    def solve(self, until_state=MineSolverState.COMPLETE, print_mode=PrintMode.NoPrint):
         game_over = 0
         while game_over == 0:
             game_over = self.solverIteration()
+            if self.state == until_state:
+                break
+            if print_mode != PrintMode.NoPrint:
+                self.grid.print(print_mode)
         return game_over, self.n_iterations
 
     def solverIteration(self):
@@ -35,8 +41,10 @@ class MineSolver():
         if self.grid.state == MSGridState.IN_PROGRESS:
             return 0
         elif self.grid.state == MSGridState.SOLVED:
+            self.state = MineSolverState.COMPLETE
             return 1
         elif self.grid.state == MSGridState.FAILED:
+            self.state = MineSolverState.COMPLETE
             return -1
         else:
             raise ValueError(f"Bad grid state: {self.grid.state}")
@@ -98,12 +106,11 @@ class MineSolver():
         return self.grid.numTouchedCells, self.grid.numMinesRemaining()
 
     def frontierSimpleSolve(self, frontier_cells):
-
         for cell in frontier_cells:
             if cell.value == cell.numFlaggedNeighbors():
                 for neighbor in cell.unrevealedUnflaggedNeighbors2():
-                    ret = self.grid.revealCell(neighbor.location)
-                    if ret == 1:
+                    ret = self.grid.revealCell(neighbor.location, debug=self.debug)
+                    if ret == 1 and self.debug:
                         self.grid.print(PrintMode.RevealMines)
                     elif ret == -1:
                         raise ValueError("Revealed a mine.")
@@ -112,22 +119,23 @@ class MineSolver():
             if cell.value - cell.numFlaggedNeighbors() == sum(cell_temp_list):
                 for i, neighbor in enumerate(cell.surround):
                     if cell_temp_list[i] == 1:
-                        self.grid.flagCell(neighbor.location)
-                        self.grid.print(PrintMode.RevealMines)
+                        self.grid.flagCell(neighbor.location, debug=self.debug)
+                        if self.debug:
+                            self.grid.print(PrintMode.RevealMines)
         return 1
 
-    def frontierPatternSolve(self):
-        pass
+    def frontierPatternSolve(self, frontier_cells):
+        return 1
 
     def randomGuess(self):
-        pass
+        return 1
 
     def startGuess(self):
         ret = self.grid.revealCell((0, 0))
         while self.grid.state == MSGridState.FAILED:
             # If the first guess is a mine, try again
             self.grid.instantiateGrid()
-            ret = self.grid.revealCell((0, 0))
+            ret = self.grid.revealCell((0, 0), debug=self.debug)
         if ret != 1:
             raise ValueError("Start guess did not succeed.")
         return 1
@@ -137,14 +145,14 @@ if __name__ == "__main__":
     # Example usage
     grid = MSGrid(20, 8, nMines=40)
     grid.instantiateGrid()
-    solver = MineSolver(grid)
+    solver = MineSolver(grid, debug=False)
     
     # Print the formatted cell
     # grid.print(PrintMode.RevealAll)
     # print()
     grid.print(PrintMode.RevealMines)
     print()
-    solver.solverIteration()
-    grid.print(PrintMode.RevealMines)
-    solver.solverIteration()
-    solver.solverIteration()
+    # solver.solverIteration()
+    # grid.print(PrintMode.RevealMines)
+    solver.solve(until_state=MineSolverState.FRONTIER_PATTERN_SOLVE, 
+                 print_mode=PrintMode.RevealMines)
