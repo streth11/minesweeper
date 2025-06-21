@@ -2,7 +2,7 @@ import numpy as np
 
 class NeighbourList(list):
     def __getitem__(self, key):
-        if key >= 8:
+        if key >= 8 or key <= -8:
             key = key % 8
         return super().__getitem__(key)
 
@@ -35,6 +35,11 @@ class GridElement():
             self._south(),
             self._southEast()
         ))
+
+    @property
+    def cardinalSurround(self):
+        """Return the cardinal (E, N, W, S) neighbors as a list."""
+        return [self.surround[i] for i in (0, 2, 4, 6)]
 
     @property
     def location(self):
@@ -183,3 +188,4 @@ if __name__ == "__main__":
     print(g[1,1].surround)
     print(g[1,1].surround[0])
     print(g[1,1].surround[9])
+    print(g[1,1].surround[-9])

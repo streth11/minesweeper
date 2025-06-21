@@ -35,11 +35,23 @@ class MSGridElement(GridElement):
             for neighbor in self.surround:
                 if not neighbor.isEdge:
                     neighbor.runRecursiveReveal(debug=debug)
+    
+    @property
+    def revealedReducedValue(self):
+        """Return the value of the cell, reduced by the number of flagged neighbors."""
+        return self.value - self.numFlaggedNeighbors()
 
     def hasRevealedNeighbors(self):
         """Check if any non-edge neighbor is revealed."""
         return any(
-            neighbor.touched for neighbor in self.surround if not neighbor.isEdge)
+            neighbor.revealed for neighbor in self.surround if not neighbor.isEdge)
+
+    def unrevealedNeighbors(self):
+        """Return a list of neighbors that are neither revealed nor flagged."""
+        return [
+            n for n in self.surround
+            if not n.isEdge and not n.revealed
+        ]
 
     def numFlaggedNeighbors(self):
         """Count the number of flagged neighbors."""
@@ -54,13 +66,6 @@ class MSGridElement(GridElement):
         return sum(self.unrevealedUnflaggedNeighbors())
 
     def unrevealedUnflaggedNeighbors(self):
-        """Return a list of neighbors that are neither revealed nor flagged."""
-        return [
-            1 if not n.isEdge and not n.revealed and not n.flagged else 0
-            for n in self.surround
-        ]
-
-    def unrevealedUnflaggedNeighbors2(self):
         """Return a list of neighbors that are neither revealed nor flagged."""
         return [
             n for n in self.surround

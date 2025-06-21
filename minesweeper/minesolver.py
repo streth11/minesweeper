@@ -1,6 +1,7 @@
 import numpy as np
 from enum import Enum
-from minegrids import MSGrid, MSGridState
+from typing import List
+from minegrids import MSGrid, MSGridState, MSGridElement
 from print_tools import PrintMode
 
 class MineSolverState(Enum):
@@ -105,27 +106,56 @@ class MineSolver():
     def getCurrentGridState(self):
         return self.grid.numTouchedCells, self.grid.numMinesRemaining()
 
-    def frontierSimpleSolve(self, frontier_cells):
+    def frontierSimpleSolve(self, frontier_cells: List[MSGridElement]):
         for cell in frontier_cells:
-            if cell.value == cell.numFlaggedNeighbors():
-                for neighbor in cell.unrevealedUnflaggedNeighbors2():
+            unrevealed_neighbors = cell.unrevealedUnflaggedNeighbors()
+            num_flagged = cell.numFlaggedNeighbors()
+            # If all mines are flagged, reveal the rest
+            if cell.value == num_flagged:
+                for neighbor in unrevealed_neighbors:
                     ret = self.grid.revealCell(neighbor.location, debug=self.debug)
                     if ret == 1 and self.debug:
                         self.grid.print(PrintMode.RevealMines)
                     elif ret == -1:
                         raise ValueError("Revealed a mine.")
-            
-            cell_temp_list = cell.unrevealedUnflaggedNeighbors()
-            if cell.value - cell.numFlaggedNeighbors() == sum(cell_temp_list):
-                for i, neighbor in enumerate(cell.surround):
-                    if cell_temp_list[i] == 1:
-                        self.grid.flagCell(neighbor.location, debug=self.debug)
-                        if self.debug:
-                            self.grid.print(PrintMode.RevealMines)
+            # If all unrevealed/unflagged neighbors must be mines, flag them
+            elif cell.value - num_flagged == len(unrevealed_neighbors):
+                for neighbor in unrevealed_neighbors:
+                    self.grid.flagCell(neighbor.location, debug=self.debug)
+                    if self.debug:
+                        self.grid.print(PrintMode.RevealMines)
         return 1
 
-    def frontierPatternSolve(self, frontier_cells):
+    def frontierPatternSolve(self, frontier_cells: List[MSGridElement]):
+        for cell in frontier_cells:
+            # 1-2-1 pattern
+            self.pattern121Solve(cell)
         return 1
+
+    def pattern121Solve(self, cell:MSGridElement):
+        if cell.revealedReducedValue != 2:
+            return
+        if len(cell.unrevealedUnflaggedNeighbors()) != 3:
+            return
+        # get target side
+        
+        unrevealed_cells = [1 if not n.isEdge and not n.touched else 0 for n in cell.cardinalSurround]
+        if sum(unrevealed_cells) != 1:
+            return
+        indices = [2*i for i,_ in enumerate(unrevealed_cells)]
+        side_idx = indices[0]
+        side_cell = cell.surround[side_idx]
+
+        #todo check values of ither cells 
+        # 
+
+
+        for j in [side_idx-1,side_idx,side_idx+1]:
+            if cell.surround[j].touched or cell.surround[j].isEdge :
+                return
+        i=1
+        # check cells either side
+        
 
     def randomGuess(self):
         return 1
@@ -156,3 +186,6 @@ if __name__ == "__main__":
     # grid.print(PrintMode.RevealMines)
     solver.solve(until_state=MineSolverState.FRONTIER_PATTERN_SOLVE, 
                  print_mode=PrintMode.RevealMines)
+    print(solver.n_iterations)
+
+    solver.pattern121Solve(grid[10,1])
