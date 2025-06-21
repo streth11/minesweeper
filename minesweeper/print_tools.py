@@ -16,17 +16,17 @@ COL_MAP = {
 }
 
 TXT_COL = {
-    '0': None,
-    '1': COL_MAP["blue"],
-    '2': COL_MAP["green"],
-    '3': COL_MAP["orange"],
-    '4': COL_MAP["violet"],
-    '5': COL_MAP["cyan"],
-    '6': COL_MAP["gray"],
-    '7': COL_MAP["yellow"],
-    '8': COL_MAP["white"],
-    'X': COL_MAP["red"],
-    '#': None,
+    "0": None,
+    "1": COL_MAP["blue"],
+    "2": COL_MAP["green"],
+    "3": COL_MAP["orange"],
+    "4": COL_MAP["violet"],
+    "5": COL_MAP["cyan"],
+    "6": COL_MAP["gray"],
+    "7": COL_MAP["yellow"],
+    "8": COL_MAP["white"],
+    "X": COL_MAP["red"],
+    "#": None,
 }
 
 class PrintMode(Enum):
@@ -35,7 +35,14 @@ class PrintMode(Enum):
     RevealMines = 1
     RevealAll = 2
 
-def print_styled(text: str, bold: bool = False, fg_rgb: list = None, bg_rgb: list = None, doPrint = False):
+
+def print_styled(
+    text: str,
+    bold: bool = False,
+    fg_rgb: list = None,
+    bg_rgb: list = None,
+    doPrint=False,
+):
     """
     Print text with optional bold style and optional RGB foreground/background colors.
 
@@ -72,6 +79,4 @@ def print_styled(text: str, bold: bool = False, fg_rgb: list = None, bg_rgb: lis
 
 if __name__ == "__main__":
     for c in COL_MAP:
-        print_styled("abc",bold=True,fg_rgb=COL_MAP[c])
-
-
+        print_styled("abc", bold=True, fg_rgb=COL_MAP[c])

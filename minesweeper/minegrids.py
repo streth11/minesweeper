@@ -4,8 +4,9 @@ from enum import Enum
 from grids import GridElement, Grid
 from print_tools import PrintMode, TXT_COL, COL_MAP, print_styled
 
+
 class MSGridElement(GridElement):
-    def __init__(self, parent, x, y, edgeENWS = ...):
+    def __init__(self, parent, x, y, edgeENWS=...):
         super().__init__(parent, x, y, edgeENWS)
         self.value = 0
         self.revealed = False
@@ -35,7 +36,7 @@ class MSGridElement(GridElement):
             for neighbor in self.surround:
                 if not neighbor.isEdge:
                     neighbor.runRecursiveReveal(debug=debug)
-    
+
     @property
     def revealedReducedValue(self):
         """Return the value of the cell, reduced by the number of flagged neighbors."""
@@ -44,23 +45,23 @@ class MSGridElement(GridElement):
     def hasRevealedNeighbors(self):
         """Check if any non-edge neighbor is revealed."""
         return any(
-            neighbor.revealed for neighbor in self.surround if not neighbor.isEdge)
+            neighbor.revealed for neighbor in self.surround if not neighbor.isEdge
+        )
 
     def unrevealedNeighbors(self):
         """Return a list of neighbors that are neither revealed nor flagged."""
-        return [
-            n for n in self.surround
-            if not n.isEdge and not n.revealed
-        ]
+        return [n for n in self.surround if not n.isEdge and not n.revealed]
 
     def numFlaggedNeighbors(self):
         """Count the number of flagged neighbors."""
-        return sum(1 for neighbor in self.surround if not neighbor.isEdge and neighbor.flagged)
+        return sum(
+            1 for neighbor in self.surround if not neighbor.isEdge and neighbor.flagged
+        )
 
     def hasUnrevealedUnflaggedNeighbors(self):
         """Return True if any neighbor is neither revealed nor flagged."""
         return any(self.unrevealedUnflaggedNeighbors())
-    
+
     def numUnrevealedUnflaggedNeighbors(self):
         """Count the number of neighbors that are neither revealed nor flagged."""
         return sum(self.unrevealedUnflaggedNeighbors())
@@ -68,9 +69,11 @@ class MSGridElement(GridElement):
     def unrevealedUnflaggedNeighbors(self):
         """Return a list of neighbors that are neither revealed nor flagged."""
         return [
-            n for n in self.surround
+            n
+            for n in self.surround
             if not n.isEdge and not n.revealed and not n.flagged
         ]
+
 
 class MSGridState(Enum):
     UNINITIALIZED = 0
@@ -78,6 +81,7 @@ class MSGridState(Enum):
     IN_PROGRESS = 2
     SOLVED = 3
     FAILED = 4
+
 
 class MSGrid(Grid):
     nMines = 0
@@ -106,27 +110,27 @@ class MSGrid(Grid):
         """Randomly place mines in the grid."""
         if self.state != MSGridState.INIT:
             raise ValueError("Grid must be in INIT state to randomize mines.")
-        
+
         if self.nMines < 0:
             raise ValueError("Number of mines cannot be negative.")
         if self.nMines > self.nX * self.nY:
             raise ValueError("Number of mines exceeds grid size.")
-        
+
         self.mine_positions.clear()
         while len(self.mine_positions) < self.nMines:
             x = np.random.randint(0, self.nX)
             y = np.random.randint(0, self.nY)
             self.mine_positions.add((x, y))
-        
+
         for x, y in self.mine_positions:
             self[x, y].is_mine = True
             for neighbor in self[x, y].surround:
                 if not neighbor.isEdge and not neighbor.is_mine:
                     neighbor.value += 1
 
-    def revealCell(self, pos:tuple, debug=False):
-        """Reveal a cell at (x, y). 
-           Returns 0 if already revealed, -1 if mine, 1 if successful."""
+    def revealCell(self, pos: tuple, debug=False):
+        """Reveal a cell at (x, y).
+        Returns 0 if already revealed, -1 if mine, 1 if successful."""
         x, y = pos
         if x >= self.nX or y >= self.nY or x < 0 or y < 0:
             raise ValueError("Coordinates out of bounds.")
@@ -140,9 +144,9 @@ class MSGrid(Grid):
             self.state = MSGridState.SOLVED
         return 1
 
-    def flagCell(self, pos:tuple, debug=False):
+    def flagCell(self, pos: tuple, debug=False):
         """Toggle flag on a cell at (x, y).
-           Returns 0 if already revealed, 1 if successful."""
+        Returns 0 if already revealed, 1 if successful."""
         x, y = pos
         if x >= self.nX or y >= self.nY or x < 0 or y < 0:
             raise ValueError("Coordinates out of bounds.")
@@ -159,18 +163,20 @@ class MSGrid(Grid):
     def numMinesRemaining(self, truth=False):
         """Returns the number of mines remaining"""
         if truth:
-            return self.nMines - sum(cell.flagged and cell.is_mine for row in self.grid for cell in row)
+            return self.nMines - sum(
+                cell.flagged and cell.is_mine for row in self.grid for cell in row
+            )
         else:
             return self.nMines - sum(cell.flagged for row in self.grid for cell in row)
 
     @property
     def numFlaggedCells(self):
         return sum(cell.flagged for row in self.grid for cell in row)
-    
+
     @property
     def numTouchedCells(self):
         return sum(cell.touched for row in self.grid for cell in row)
-    
+
     @property
     def numRevealedCells(self):
         return sum(cell.revealed for row in self.grid for cell in row)
@@ -181,64 +187,75 @@ class MSGrid(Grid):
 
     def revealedWithUnrevealedNeighbors(self):
         return [
-            cell for cell in self.grid.flat
+            cell
+            for cell in self.grid.flat
             if cell.revealed and cell.hasUnrevealedUnflaggedNeighbors()
         ]
 
     def getFrontierCells(self):
         return self.revealedWithUnrevealedNeighbors()
 
-    def getCellFormat(self, cell:MSGridElement, print_mode:PrintMode=PrintMode.Normal):
+    def getCellFormat(
+        self, cell: MSGridElement, print_mode: PrintMode = PrintMode.Normal
+    ):
         """Returns a formatted string for the cell based on the print mode."""
         if print_mode == PrintMode.Normal:
             if cell.touched:
                 if cell.flagged:
-                    styled_out = print_styled('X', bold=True, fg_rgb=COL_MAP["red"])
+                    styled_out = print_styled("X", bold=True, fg_rgb=COL_MAP["red"])
                 else:
                     if cell.value == 0:
-                        styled_out = print_styled(' ')
+                        styled_out = print_styled(" ")
                     else:
-                        styled_out = print_styled(str(cell.value), bold=True, fg_rgb=TXT_COL[str(cell.value)])
+                        styled_out = print_styled(
+                            str(cell.value), bold=True, fg_rgb=TXT_COL[str(cell.value)]
+                        )
             else:
-                styled_out = print_styled(' ', bold=True, bg_rgb=COL_MAP["gray"])
+                styled_out = print_styled(" ", bold=True, bg_rgb=COL_MAP["gray"])
         elif print_mode == PrintMode.RevealMines:
             if cell.is_mine:
                 if cell.flagged:
-                    styled_out = print_styled('X', bold=True, fg_rgb=COL_MAP["red"])
+                    styled_out = print_styled("X", bold=True, fg_rgb=COL_MAP["red"])
                 else:
-                    styled_out = print_styled(' ', bold=True, bg_rgb=COL_MAP["red"])
+                    styled_out = print_styled(" ", bold=True, bg_rgb=COL_MAP["red"])
             else:
                 if cell.flagged:
-                    styled_out = print_styled('X', bold=True, bg_rgb=COL_MAP["yellow"])
+                    styled_out = print_styled("X", bold=True, bg_rgb=COL_MAP["yellow"])
                 elif cell.revealed:
                     if cell.value == 0:
-                        styled_out = print_styled(' ')
+                        styled_out = print_styled(" ")
                     else:
-                        styled_out = print_styled(str(cell.value), bold=True, fg_rgb=TXT_COL[str(cell.value)])
+                        styled_out = print_styled(
+                            str(cell.value), bold=True, fg_rgb=TXT_COL[str(cell.value)]
+                        )
                 else:
-                    styled_out = print_styled(' ', bold=True, bg_rgb=COL_MAP["gray"])
+                    styled_out = print_styled(" ", bold=True, bg_rgb=COL_MAP["gray"])
         elif print_mode == PrintMode.RevealAll:
             if cell.is_mine:
                 if cell.flagged:
-                    styled_out = print_styled('X', bold=True, fg_rgb=COL_MAP["red"])
+                    styled_out = print_styled("X", bold=True, fg_rgb=COL_MAP["red"])
                 else:
-                    styled_out = print_styled(' ', bold=True, bg_rgb=COL_MAP["red"])
+                    styled_out = print_styled(" ", bold=True, bg_rgb=COL_MAP["red"])
             else:
                 if cell.flagged:
-                    styled_out = print_styled(str(cell.value), bold=True, bg_rgb=COL_MAP["yellow"])
+                    styled_out = print_styled(
+                        str(cell.value), bold=True, bg_rgb=COL_MAP["yellow"]
+                    )
                 elif cell.value == 0:
-                    styled_out = print_styled(' ')
+                    styled_out = print_styled(" ")
                 else:
-                    styled_out = print_styled(str(cell.value), bold=True, fg_rgb=TXT_COL[str(cell.value)])
+                    styled_out = print_styled(
+                        str(cell.value), bold=True, fg_rgb=TXT_COL[str(cell.value)]
+                    )
 
         return f" {styled_out} "
-    
+
 
 if __name__ == "__main__":
     # Example usage
     grid = MSGrid(20, 8, nMines=40)
     grid.instantiateGrid()
-    
+
     # Print the formatted cell
     grid.print(PrintMode.RevealAll)
     print()
