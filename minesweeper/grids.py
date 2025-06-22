@@ -16,7 +16,12 @@ class EdgeElement:
 
 
 class GridElement:
-    def __init__(self, parent, x: int, y: int, edgeENWS: list = [0, 0, 0, 0]):
+    def __init__(self, 
+                 parent, 
+                 x: int, 
+                 y: int, 
+                 edgeENWS: list = [0, 0, 0, 0],
+                 EdgeElementType=EdgeElement):
         self.x = x
         self.y = y
         self.parent = parent
@@ -24,6 +29,7 @@ class GridElement:
         self.surround = []
         self.edgeENWS = [bool(e) for e in edgeENWS]
         self.value = x + y
+        self.EdgeType = EdgeElementType
 
     def getSurrounding(self):
         self.surround = NeighbourList((
@@ -49,42 +55,42 @@ class GridElement:
 
     def _east(self):
         if self.edgeENWS[0]:
-            return EdgeElement(self.parent)
+            return self.EdgeType(self.parent)
         return self.parent[self.x + 1, self.y]
 
     def _north(self):
         if self.edgeENWS[1]:
-            return EdgeElement(self.parent)
+            return self.EdgeType(self.parent)
         return self.parent[self.x, self.y + 1]
 
     def _west(self):
         if self.edgeENWS[2]:
-            return EdgeElement(self.parent)
+            return self.EdgeType(self.parent)
         return self.parent[self.x - 1, self.y]
 
     def _south(self):
         if self.edgeENWS[3]:
-            return EdgeElement(self.parent)
+            return self.EdgeType(self.parent)
         return self.parent[self.x, self.y - 1]
 
     def _northEast(self):
         if self.edgeENWS[0] or self.edgeENWS[1]:
-            return EdgeElement(self.parent)
+            return self.EdgeType(self.parent)
         return self.parent[self.x + 1, self.y + 1]
 
     def _northWest(self):
         if self.edgeENWS[1] or self.edgeENWS[2]:
-            return EdgeElement(self.parent)
+            return self.EdgeType(self.parent)
         return self.parent[self.x - 1, self.y + 1]
 
     def _southWest(self):
         if self.edgeENWS[2] or self.edgeENWS[3]:
-            return EdgeElement(self.parent)
+            return self.EdgeType(self.parent)
         return self.parent[self.x - 1, self.y - 1]
 
     def _southEast(self):
         if self.edgeENWS[3] or self.edgeENWS[0]:
-            return EdgeElement(self.parent)
+            return self.EdgeType(self.parent)
         return self.parent[self.x + 1, self.y - 1]
 
     @property
@@ -122,7 +128,7 @@ class Grid:
         self.nY = nY
         self.n = self.nX * self.nY
 
-    def instantiateGrid(self, GridElemType=GridElement, *args):
+    def instantiateGrid(self, GridElemType=GridElement, EdgeElementType=EdgeElement, *args):
         """Instantiates the grid with GridElemType elements."""
         self.grid = np.empty((self.nX, self.nY), dtype=object)
 
@@ -137,7 +143,7 @@ class Grid:
                     edgeENWS[3] = 1
                 if j == self.nY - 1:
                     edgeENWS[1] = 1
-                self.grid[i, j] = GridElemType(self, i, j, edgeENWS, *args)
+                self.grid[i, j] = GridElemType(self, i, j, edgeENWS, EdgeElementType, *args)
 
         for i in range(self.nX):
             for j in range(self.nY):

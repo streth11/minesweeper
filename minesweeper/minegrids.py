@@ -4,10 +4,17 @@ from enum import Enum
 from grids import GridElement, Grid
 from print_tools import PrintMode, TXT_COL, COL_MAP, print_styled
 
+class MSEdgeElement:
+    def __init__(self, parent, *args):
+        self.parent = parent
+        self.isEdge = True
+        self.value = -1
+        self.touched = False
+
 
 class MSGridElement(GridElement):
-    def __init__(self, parent, x, y, edgeENWS=...):
-        super().__init__(parent, x, y, edgeENWS)
+    def __init__(self, parent, *args):
+        super().__init__(parent, *args)
         self.value = 0
         self.revealed = False
         self.flagged = False
@@ -80,7 +87,8 @@ class MSGridState(Enum):
     INIT = 1
     IN_PROGRESS = 2
     SOLVED = 3
-    FAILED = 4
+    STALEMATE = 4
+    FAILED = 5
 
 
 class MSGrid(Grid):
@@ -94,16 +102,28 @@ class MSGrid(Grid):
         self.mine_positions = set()
         self.state = MSGridState.UNINITIALIZED
 
-    def instantiateGrid(self, *args):
+    def instantiateGrid(self, mine_coords:set=None, *args):
         """Instantiate the grid with a given number of mines."""
         if self.state == MSGridState.FAILED or self.state == MSGridState.SOLVED:
             self.state = MSGridState.UNINITIALIZED
         if self.state != MSGridState.UNINITIALIZED:
             raise ValueError("Cannot re-instantiate in current state.")
-        super().instantiateGrid(MSGridElement, *args)
+        super().instantiateGrid(GridElemType=MSGridElement, EdgeElementType=MSEdgeElement, *args)
         self.state = MSGridState.INIT
 
-        self.randomizeMines()
+        if mine_coords is None:
+            self.randomizeMines()
+        else:
+            self.mine_positions = mine_coords
+            self.nMines = len(mine_coords)
+
+        # instantiate
+        for x, y in self.mine_positions:
+            self[x, y].is_mine = True
+            for neighbor in self[x, y].surround:
+                if not neighbor.isEdge and not neighbor.is_mine:
+                    neighbor.value += 1
+
         self.state = MSGridState.IN_PROGRESS
 
     def randomizeMines(self):
@@ -121,12 +141,6 @@ class MSGrid(Grid):
             x = np.random.randint(0, self.nX)
             y = np.random.randint(0, self.nY)
             self.mine_positions.add((x, y))
-
-        for x, y in self.mine_positions:
-            self[x, y].is_mine = True
-            for neighbor in self[x, y].surround:
-                if not neighbor.isEdge and not neighbor.is_mine:
-                    neighbor.value += 1
 
     def revealCell(self, pos: tuple, debug=False):
         """Reveal a cell at (x, y).
@@ -183,7 +197,7 @@ class MSGrid(Grid):
 
     def untouchedListFlattened(self):
         """Returns a flattened list of untouched cells."""
-        return [cell for cell in self.grid.flat() if not cell.touched]
+        return [cell for cell in self.grid.flat if not cell.touched]
 
     def revealedWithUnrevealedNeighbors(self):
         return [
