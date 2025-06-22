@@ -77,6 +77,7 @@ class MineSolver:
         elif (
             self.state == MineSolverState.FRONTIER_SIMPLE_SOLVE
             or self.state == MineSolverState.FRONTIER_PATTERN_SOLVE
+            or self.state == MineSolverState.RANDOM_GUESS
         ):
             iter_frontier_cells = self.grid.getFrontierCells()
 
@@ -115,7 +116,7 @@ class MineSolver:
             ret = self.randomGuess()
             if ret is None:
                 raise ValueError("Random guess returned None.")
-            
+
             self.iter_touched_cells, self.iter_mines_remaining = (
                 self.getCurrentGridState()
             )
@@ -125,7 +126,7 @@ class MineSolver:
                 self.grid.state = MSGridState.STALEMATE
                 return MineSolverState.COMPLETE
             return MineSolverState.FRONTIER_SIMPLE_SOLVE
-       
+
         else:
             raise ValueError(f"Unknown state: {self.state}")
 
@@ -134,7 +135,7 @@ class MineSolver:
 
     def frontierSimpleSolve(self, frontier_cells: List[MSGridElement]):
         for cell in frontier_cells:
-            unrevealed_neighbors = cell.unrevealedUnflaggedNeighbors()
+            unrevealed_neighbors = cell.untouchedNeighbors()
             num_flagged = cell.numFlaggedNeighbors()
             # If all mines are flagged, reveal the rest
             if cell.value == num_flagged:
@@ -165,15 +166,15 @@ class MineSolver:
 
     def patternSolveExecuteSets(self):
         for x, y in self.set_to_flag:
-            self.grid.flagCell((x,y), debug=self.debug)
+            self.grid.flagCell((x, y), debug=self.debug)
 
         for x, y in self.set_to_reveal:
-            self.grid.revealCell((x,y), debug=self.debug)
+            self.grid.revealCell((x, y), debug=self.debug)
 
     def pattern12XSolve(self, cell: MSGridElement):
         if cell.revealedReducedValue != 2:
             return
-        if len(cell.unrevealedUnflaggedNeighbors()) != 3:
+        if len(cell.untouchedNeighbors()) != 3:
             return
 
         # get target side
@@ -181,58 +182,59 @@ class MineSolver:
             1 if not n.isEdge and not n.touched else 0 for n in cell.cardinalSurround
         ]
         if sum(unrevealed_cells) != 1:
-            return # can only have 1 unrevealed cardinal side
+            return  # can only have 1 unrevealed cardinal side
         side_idx = unrevealed_cells.index(1) * 2
 
         # check its a row
         if cell.surround[side_idx + 1].touched or cell.surround[side_idx - 1].touched:
             return
 
-
         if cell.surround[side_idx + 2].revealedReducedValue == 1:
-            self.set_to_flag.add(cell.surround[side_idx-1].location)
-        
+            self.set_to_flag.add(cell.surround[side_idx - 1].location)
+
         if cell.surround[side_idx - 2].revealedReducedValue == 1:
-            self.set_to_flag.add(cell.surround[side_idx+1].location)
+            self.set_to_flag.add(cell.surround[side_idx + 1].location)
 
     def pattern11XSolve(self, cell: MSGridElement):
         if cell.revealedReducedValue != 1:
             return
-        if len(cell.unrevealedUnflaggedNeighbors()) != 2:
+        if len(cell.untouchedNeighbors()) != 2:
             return
-        
+
         # get target side
         unrevealed_cells = [
             1 if not n.isEdge and not n.touched else 0 for n in cell.cardinalSurround
         ]
         if sum(unrevealed_cells) != 1:
-            return # can only have 1 unrevealed cardinal side
+            return  # can only have 1 unrevealed cardinal side
         side_idx = unrevealed_cells.index(1) * 2
 
         # check there is exactly 1 unrevealed either side
         if not cell.surround[side_idx + 1].touched:
             direction = 1
         elif not cell.surround[side_idx - 1].touched:
-            direction  = -1
+            direction = -1
         else:
             return
-        
+
         # the cell in that cardinal direction must have a value of 1
-        if cell.surround[side_idx + 2*direction].revealedReducedValue != 1:
+        if cell.surround[side_idx + 2 * direction].revealedReducedValue != 1:
             return
-        
+
         # check cell other side (should be open or edge)
-        if not cell.surround[side_idx + -1*direction].isEdge:
-            if not cell.surround[side_idx + -1*direction].touched:
+        if not cell.surround[side_idx + -1 * direction].isEdge:
+            if not cell.surround[side_idx + -1 * direction].touched:
                 return
 
-        cell_to_reveal = cell.surround[side_idx + 2*direction].surround[side_idx + 1*direction]
-        
+        cell_to_reveal = cell.surround[side_idx + 2 * direction].surround[
+            side_idx + 1 * direction
+        ]
+
         if cell_to_reveal.touched or cell_to_reveal.isEdge:
             return
-        
+
         self.set_to_reveal.add(cell_to_reveal.location)
-        
+
     def randomGuess(self):
         return 1
 

@@ -1,8 +1,10 @@
 import numpy as np
+from typing import List
 
 from enum import Enum
 from grids import GridElement, Grid
 from print_tools import PrintMode, TXT_COL, COL_MAP, print_styled
+
 
 class MSEdgeElement:
     def __init__(self, parent, *args):
@@ -13,12 +15,13 @@ class MSEdgeElement:
 
 
 class MSGridElement(GridElement):
-    def __init__(self, parent, *args):
-        super().__init__(parent, *args)
+    def __init__(self, parent, *args, **kwargs):
+        super().__init__(parent, *args, **kwargs)
         self.value = 0
         self.revealed = False
         self.flagged = False
         self.is_mine = False
+        self.group_id = None
 
     @property
     def touched(self):
@@ -26,11 +29,17 @@ class MSGridElement(GridElement):
 
     def reveal(self, debug=False):
         self.revealed = True
+        if self.group_id is not None:
+            g = self.parent.getGroupFromID(self.group_id)
+            g.invalidate()
         if debug:
             print(f"Revealed cell at ({self.x}, {self.y}).")
 
     def toggleFlag(self, debug=False):
         self.flagged = not self.flagged
+        if self.group_id is not None:
+            g = self.parent.getGroupFromID(self.group_id)
+            g.invalidate()
         if debug:
             print(f"Toggled flag on cell at ({self.x}, {self.y}).")
 
@@ -65,21 +74,21 @@ class MSGridElement(GridElement):
             1 for neighbor in self.surround if not neighbor.isEdge and neighbor.flagged
         )
 
-    def hasUnrevealedUnflaggedNeighbors(self):
+    def hasUntouchedNeighbors(self):
         """Return True if any neighbor is neither revealed nor flagged."""
-        return any(self.unrevealedUnflaggedNeighbors())
+        return any(self.untouchedNeighbors())
 
-    def numUnrevealedUnflaggedNeighbors(self):
+    def numUntouchedNeighbors(self):
         """Count the number of neighbors that are neither revealed nor flagged."""
-        return sum(self.unrevealedUnflaggedNeighbors())
+        return sum(self.untouchedNeighbors())
 
-    def unrevealedUnflaggedNeighbors(self):
+    def untouchedNeighbors(self):
         """Return a list of neighbors that are neither revealed nor flagged."""
-        return [
-            n
-            for n in self.surround
-            if not n.isEdge and not n.revealed and not n.flagged
-        ]
+        return [n for n in self.surround if not n.isEdge and not n.touched]
+
+    def untouchedCardinalNeighbors(self):
+        """Return a list of neighbors that are neither revealed nor flagged."""
+        return [n for n in self.cardinalSurround if not n.isEdge and not n.touched]
 
 
 class MSGridState(Enum):
@@ -89,6 +98,35 @@ class MSGridState(Enum):
     SOLVED = 3
     STALEMATE = 4
     FAILED = 5
+
+
+class ContiguousGroup(set):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.valid = False
+        self.id = -1
+
+    def setID(self, id):
+        self.id = id
+        self.valid = True
+
+    def invalidate(self):
+        self.valid = False
+        for cell in self.__iter__():
+            cell.group_id = None
+
+    def add(self, cell: MSGridElement):
+        super().add(cell)
+        cell.group_id = self.id
+
+    def remove(self, cell: MSGridElement):
+        cell.group_id = None
+        super().remove(cell)
+
+    def pushGroupIDs(self):
+        if self.valid:
+            for cell in self.__iter__():
+                cell.group_id = self.id
 
 
 class MSGrid(Grid):
@@ -101,14 +139,18 @@ class MSGrid(Grid):
         self.nMines = nMines
         self.mine_positions = set()
         self.state = MSGridState.UNINITIALIZED
+        self.groups = []
+        self.groupCounter = 0
 
-    def instantiateGrid(self, mine_coords:set=None, *args):
+    def instantiateGrid(self, mine_coords: set = None, *args, **kwargs):
         """Instantiate the grid with a given number of mines."""
         if self.state == MSGridState.FAILED or self.state == MSGridState.SOLVED:
             self.state = MSGridState.UNINITIALIZED
         if self.state != MSGridState.UNINITIALIZED:
             raise ValueError("Cannot re-instantiate in current state.")
-        super().instantiateGrid(GridElemType=MSGridElement, EdgeElementType=MSEdgeElement, *args)
+        super().instantiateGrid(
+            GridElemType=MSGridElement, EdgeElementType=MSEdgeElement, *args, **kwargs
+        )
         self.state = MSGridState.INIT
 
         if mine_coords is None:
@@ -203,14 +245,84 @@ class MSGrid(Grid):
         return [
             cell
             for cell in self.grid.flat
-            if cell.revealed and cell.hasUnrevealedUnflaggedNeighbors()
+            if cell.revealed and cell.hasUntouchedNeighbors()
         ]
 
     def getFrontierCells(self):
         return self.revealedWithUnrevealedNeighbors()
 
+    def createContiguousTargets(self, frontier_cells: List[MSGridElement] = None):
+        if frontier_cells is None:
+            frontier_cells = self.getFrontierCells()
+
+        for cell in frontier_cells:
+            potential_targets = cell.untouchedNeighbors()
+            for n in potential_targets:
+                g_id = n.group_id
+
+                # in a valid group already - skip
+                if g_id in self.getValidGroupIDs():
+                    continue
+
+                if g_id is not None:
+                    # confirm group invalid
+                    if self.getGroupFromID(g_id).valid:
+                        raise ValueError(f"Group {g_id} should be invalid")
+
+                # no group, look around
+                touchingGroups = {
+                    s.group_id for s in n.untouchedNeighbors() if s.group_id is not None
+                }
+                if len(touchingGroups) == 0:
+                    # no neighbouring groups, create a group
+                    g = self.createGroup()
+                    g.add(n)
+                elif len(touchingGroups) == 1:
+                    # one group, add to group
+                    g = self.getGroupFromID(next(iter(touchingGroups)))
+                    g.add(n)
+                elif len(touchingGroups) > 1:
+                    # more than 1 group found
+                    g = self.joinGroups(touchingGroups)
+                    g.add(n)
+
+        self.cleanupInvalidGroups()
+
+    def getValidGroupIDs(self) -> list:
+        if len(self.groups) == 0:
+            return []
+        return [g.id for g in self.groups if g.valid]
+
+    def createGroup(self) -> ContiguousGroup:
+        new_group = ContiguousGroup()
+        new_group.setID(self.groupCounter)
+        self.groupCounter += 1
+        self.groups.append(new_group)
+        return new_group
+
+    def getGroupFromID(self, id) -> ContiguousGroup:
+        for g in self.groups:
+            if g.id == id:
+                return g
+        raise ValueError(f"Undefined group with id {id}")
+
+    def joinGroups(self, group_ids: set):
+        new_group = self.createGroup()
+        for comb_g_id in group_ids:
+            old_group = self.getGroupFromID(comb_g_id)
+            old_group.invalidate()
+            new_group.update(old_group)
+        new_group.pushGroupIDs()
+        return new_group
+
+    def cleanupInvalidGroups(self):
+        self.groups = [g for g in self.groups if g.valid]
+
     def getCellFormat(
-        self, cell: MSGridElement, print_mode: PrintMode = PrintMode.Normal
+        self,
+        cell: MSGridElement,
+        print_mode: PrintMode = PrintMode.Normal,
+        show_groups=False,
     ):
         """Returns a formatted string for the cell based on the print mode."""
         if print_mode == PrintMode.Normal:
@@ -231,7 +343,12 @@ class MSGrid(Grid):
                 if cell.flagged:
                     styled_out = print_styled("X", bold=True, fg_rgb=COL_MAP["red"])
                 else:
-                    styled_out = print_styled(" ", bold=True, bg_rgb=COL_MAP["red"])
+                    if show_groups and cell.group_id is not None:
+                        styled_out = print_styled(
+                            f"{cell.group_id}", bold=True, bg_rgb=COL_MAP["red"]
+                        )
+                    else:
+                        styled_out = print_styled(" ", bold=True, bg_rgb=COL_MAP["red"])
             else:
                 if cell.flagged:
                     styled_out = print_styled("X", bold=True, bg_rgb=COL_MAP["yellow"])
@@ -243,7 +360,14 @@ class MSGrid(Grid):
                             str(cell.value), bold=True, fg_rgb=TXT_COL[str(cell.value)]
                         )
                 else:
-                    styled_out = print_styled(" ", bold=True, bg_rgb=COL_MAP["gray"])
+                    if show_groups and cell.group_id is not None:
+                        styled_out = print_styled(
+                            f"{cell.group_id}", bold=True, bg_rgb=COL_MAP["gray"]
+                        )
+                    else:
+                        styled_out = print_styled(
+                            " ", bold=True, bg_rgb=COL_MAP["gray"]
+                        )
         elif print_mode == PrintMode.RevealAll:
             if cell.is_mine:
                 if cell.flagged:
@@ -275,7 +399,14 @@ if __name__ == "__main__":
     print()
     grid.print(PrintMode.Normal)
     grid.revealCell((0, 0))
-    print(grid.flagCell((2, 3)))
-    print(grid.flagCell((2, 4)))
-    grid.print()
+    # print(grid.flagCell((2, 3)))
+    # print(grid.flagCell((2, 4)))
+    # grid.print()
+    grid.revealCell((7, 2))
+    grid.revealCell((8, 5))
+    grid.revealCell((8, 7))
     grid.print(PrintMode.RevealMines)
+
+    grid.createContiguousTargets()
+
+    grid.print(PrintMode.RevealMines, show_groups=True)

@@ -163,7 +163,7 @@ class Grid:
             return self.grid[x, y]
         return self.grid
 
-    def print(self, *args):
+    def print(self, *args, **kwargs):
         """Prints the grid values with grid lines and colored output."""
         cell_width = 3
         horizontal = "+" + ("-" * cell_width + "+") * self.nX
@@ -172,7 +172,7 @@ class Grid:
             print(horizontal)
             row = "|"
             for x in range(self.nX):
-                cell = self.getCellFormat(self.grid[x, y], *args)
+                cell = self.getCellFormat(self.grid[x, y], *args, **kwargs)
                 row += cell.center(cell_width) + "|"
             print(row)
         print(horizontal)
