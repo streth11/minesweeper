@@ -1,7 +1,7 @@
 import numpy as np
 from enum import Enum
 from typing import List
-from minegrids import MSGrid, MSGridState, MSGridElement
+from minegrids import MSGrid, MSGridState, MSGridElement, ContiguousGroup
 from print_tools import PrintMode
 
 
@@ -235,9 +235,42 @@ class MineSolver:
 
         self.set_to_reveal.add(cell_to_reveal.location)
 
-    def randomGuess(self):
+    def combinationSolve(self, frontier_cells: List[MSGridElement]):
+        groups = self.grid.establishContiguousCells(frontier_cells)
+        
+        for g in groups:
+            n = len(g)
+            n_combs = 2 ** n - 1
+            combs = self.binary_mask_arr(n)
+            validCombs = np.array()
+            for comb in combs:
+                for idx,cell in enumerate(g):
+                    mark = comb[idx]
+                    cell.combination_mark = mark
+                isValid = self.evaluateCombination(g, frontier_cells)
+                if isValid:
+                    validCombs = np.vstack((validCombs,comb))
+            for cell in g:
+                cell.combination_mark = None     
         return 1
 
+    def evaluateCombination(self, group:ContiguousGroup, frontier_cells: List[MSGridElement]):
+        for cell in frontier_cells:
+            for n in cell.surround:
+                if not n.touched and not n.isEdge:
+                    if n not in group:
+                        return
+
+            numMarkedCells = sum(
+                1 for n in cell.surround if not n.isEdge and n.combination_mark == 1
+            )
+            if numMarkedCells != cell.revealedReducedValue:
+                return False
+        return True
+
+    def randomGuess(self, frontier_cells: List[MSGridElement]):
+        return 1
+    
     def runGridCleanup(self):
         for cell in self.grid.untouchedListFlattened():
             self.grid.revealCell(cell.location)
@@ -252,6 +285,18 @@ class MineSolver:
         if ret != 1:
             raise ValueError("Start guess did not succeed.")
         return 1
+
+    # def binary_list(n, k):
+    #     if not (0 <= k < 2 ** n):
+    #         raise ValueError(f"k must be in the range 0 <= k < 2^{n} (got k={k})")
+    #     return [(k >> i) & 1 for i in range(n)]
+
+    def binary_mask_arr(n) -> np.array:
+        """
+        Returns a 2D numpy array of shape (2**n, n), where each row is the binary representation
+        of k (0 <= k < 2**n), least significant bit first.
+        """
+        return np.array([[(k >> i) & 1 for i in range(n)] for k in range(2 ** n)])
 
 
 if __name__ == "__main__":

@@ -22,6 +22,7 @@ class MSGridElement(GridElement):
         self.flagged = False
         self.is_mine = False
         self.group_id = None
+        self.combination_mark = None
 
     @property
     def touched(self):
@@ -251,7 +252,7 @@ class MSGrid(Grid):
     def getFrontierCells(self):
         return self.revealedWithUnrevealedNeighbors()
 
-    def createContiguousTargets(self, frontier_cells: List[MSGridElement] = None):
+    def establishContiguousCells(self, frontier_cells: List[MSGridElement] = None) -> List[ContiguousGroup]:
         if frontier_cells is None:
             frontier_cells = self.getFrontierCells()
 
@@ -287,6 +288,7 @@ class MSGrid(Grid):
                     g.add(n)
 
         self.cleanupInvalidGroups()
+        return self.groups
 
     def getValidGroupIDs(self) -> list:
         if len(self.groups) == 0:
