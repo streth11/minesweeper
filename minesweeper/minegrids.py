@@ -106,6 +106,14 @@ class ContiguousGroup(set):
         super().__init__(*args, **kwargs)
         self.valid = False
         self.id = -1
+        self.initStats()
+        
+    def initStats(self):
+        self.max_prob = 0
+        self.min_prob = 1
+        self.max_prob_cell = None
+        self.min_prob_cell = None
+        self.valid_comb_min_mines = np.inf()
 
     def setID(self, id):
         self.id = id
@@ -113,6 +121,7 @@ class ContiguousGroup(set):
 
     def invalidate(self):
         self.valid = False
+        self.initStats()
         for cell in self.__iter__():
             cell.group_id = None
 
@@ -251,6 +260,11 @@ class MSGrid(Grid):
 
     def getFrontierCells(self):
         return self.revealedWithUnrevealedNeighbors()
+
+    def notInContiguousGroup(self):
+        if len(self.groups) == 0:
+            return self.untouchedListFlattened()
+        return [cell for cell in self.grid.flat if not cell.touched and cell.group_id is None]
 
     def establishContiguousCells(self, frontier_cells: List[MSGridElement] = None) -> List[ContiguousGroup]:
         if frontier_cells is None:

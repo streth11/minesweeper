@@ -9,9 +9,10 @@ class MineSolverState(Enum):
     START = 0
     FRONTIER_SIMPLE_SOLVE = 1
     FRONTIER_PATTERN_SOLVE = 2
-    RANDOM_GUESS = 3
-    CLEANUP = 4
-    COMPLETE = 5
+    COMBINATION_SOLVE = 3
+    RANDOM_GUESS = 4
+    CLEANUP = 5
+    COMPLETE = 6
 
 
 class MineSolver:
@@ -29,6 +30,7 @@ class MineSolver:
 
         self.set_to_flag = set()
         self.set_to_reveal = set()
+        self.cells_to_guess = []
 
     def solve(self, until_state=MineSolverState.COMPLETE, print_mode=PrintMode.NoPrint):
         game_over = 0
@@ -77,7 +79,7 @@ class MineSolver:
         elif (
             self.state == MineSolverState.FRONTIER_SIMPLE_SOLVE
             or self.state == MineSolverState.FRONTIER_PATTERN_SOLVE
-            or self.state == MineSolverState.RANDOM_GUESS
+            or self.state == MineSolverState.COMBINATION_S
         ):
             iter_frontier_cells = self.grid.getFrontierCells()
 
@@ -99,6 +101,21 @@ class MineSolver:
         elif self.state == MineSolverState.FRONTIER_PATTERN_SOLVE:
             # execute frontier pattern solve
             ret = self.frontierPatternSolve(iter_frontier_cells)
+            if ret is None:
+                raise ValueError("Frontier pattern solve returned None.")
+
+            # see what has changed
+            self.iter_touched_cells, self.iter_mines_remaining = (
+                self.getCurrentGridState()
+            )
+            # update state based on touched cells
+            if self.prev_touched_cells == self.iter_touched_cells:
+                return MineSolverState.COMBINATION_SOLVE
+            return MineSolverState.FRONTIER_SIMPLE_SOLVE
+
+        elif self.state == MineSolverState.COMBINATION_SOLVE:
+            # execute combination solve
+            ret = self.combinationSolve(iter_frontier_cells)
             if ret is None:
                 raise ValueError("Frontier pattern solve returned None.")
 
@@ -133,6 +150,13 @@ class MineSolver:
     def getCurrentGridState(self):
         return self.grid.numTouchedCells, self.grid.numMinesRemaining()
 
+    def solverExecuteSets(self):
+        for x, y in self.set_to_flag:
+            self.grid.flagCell((x, y), debug=self.debug)
+
+        for x, y in self.set_to_reveal:
+            self.grid.revealCell((x, y), debug=self.debug)
+
     def frontierSimpleSolve(self, frontier_cells: List[MSGridElement]):
         for cell in frontier_cells:
             unrevealed_neighbors = cell.untouchedNeighbors()
@@ -161,15 +185,8 @@ class MineSolver:
             self.pattern12XSolve(cell)
             # 1-1-X pattern
             self.pattern11XSolve(cell)
-        self.patternSolveExecuteSets()
+        self.solverExecuteSets()
         return 1
-
-    def patternSolveExecuteSets(self):
-        for x, y in self.set_to_flag:
-            self.grid.flagCell((x, y), debug=self.debug)
-
-        for x, y in self.set_to_reveal:
-            self.grid.revealCell((x, y), debug=self.debug)
 
     def pattern12XSolve(self, cell: MSGridElement):
         if cell.revealedReducedValue != 2:
@@ -236,39 +253,123 @@ class MineSolver:
         self.set_to_reveal.add(cell_to_reveal.location)
 
     def combinationSolve(self, frontier_cells: List[MSGridElement]):
+        self.set_to_flag.clear()
+        self.set_to_reveal.clear()
         groups = self.grid.establishContiguousCells(frontier_cells)
         
         for g in groups:
-            n = len(g)
-            n_combs = 2 ** n - 1
-            combs = self.binary_mask_arr(n)
-            validCombs = np.array()
-            for comb in combs:
-                for idx,cell in enumerate(g):
+            if g.max_prob_cell is None:
+                self.calculateGroupProbabilities(g,frontier_cells)
+            
+        # no certainties in all groups, pick best option
+        if len(self.set_to_flag) == 0 and len(self.set_to_reveal) == 0:
+            
+            groups_worst_case_nMines = sum([g.valid_comb_min_mines for g in groups])
+            pred_ungrouped_mines = self.iter_mines_remaining - groups_worst_case_nMines
+            if pred_ungrouped_mines < 0:
+                raise ValueError("Mine estimation has failed")
+            
+            ungrouped_cells = self.grid.notInContiguousGroup()
+            # check if this is not 0
+            if len(ungrouped_cells) == 0 or pred_ungrouped_mines > 0:
+                # from groups, calc least likely mine
+                min_groups_prob = 1
+                min_groups_prob_cell = None
+                for g in groups:
+                    if g.min_prob < min_groups_prob:
+                        min_groups_prob = g.min_prob
+                        min_groups_prob_cell = g.min_prob_cell
+            
+            if pred_ungrouped_mines == 0:
+                # all cells outside groups should be free
+                # return providing cells to make a random guess from
+                if len(ungrouped_cells) > 0:
+                    self.cells_to_guess = ungrouped_cells
+                else:
+                    self.set_to_reveal.add(min_groups_prob_cell.location)
+            else:
+                # calc probability an outside cell is a mine
+                prob_ungrouped_mine = np.divide(len(ungrouped_cells),self.iter_mines_remaining)
+                # if outside cell best guess random guess it, otherwise use group calc guess
+                if prob_ungrouped_mine < min_groups_prob and len(ungrouped_cells) > 0:
+                    # better probability to guess an ungrouped cell
+                    self.cells_to_guess = ungrouped_cells
+                else:
+                    self.set_to_reveal.add(min_groups_prob_cell.location)
+            
+            # from groups, flag most likely mine
+            #max_prob = 0
+            #max_prob_cell = None
+            #for g in groups:
+                #if g.max_prob > max_prob:
+                    #max_prob = g.max_prob
+                    #max_prob_cell = g.max_prob_cell
+            #self.set_to_flag.add(max_prob_cell.location)
+                    
+        self.solverExecuteSets()
+        return 1
+    
+    def calculateGroupProbabilities(self, group:ContiguousGroup, frontier_cells: List[MSGridElement]):
+        # work out probabilities for a mine on each cell
+        n = len(group)
+        n_combs = 2 ** n - 1
+        combs = self.binary_mask_arr(n)
+        valid_combs = np.array()
+        for comb in combs:
+            comb_nMines = np.sum(comb)
+            if comb_nMines <= self.iter_mines_remaining:
+                for idx,cell in enumerate(group):
                     mark = comb[idx]
                     cell.combination_mark = mark
-                isValid = self.evaluateCombination(g, frontier_cells)
-                if isValid:
-                    validCombs = np.vstack((validCombs,comb))
-            for cell in g:
-                cell.combination_mark = None     
-        return 1
+                is_valid = self.evaluateCombination(group, frontier_cells)
+                if is_valid:
+                    valid_combs = np.vstack((valid_combs,comb))
+                    group.valid_comb_min_mines = np.min(group.valid_comb_min_mines,comb_nMines)
+        prob = np.divide(np.sum(valid_combs,axis=1),n_combs)
+            
+        # assign certainties to be actioned
+        group_has_certainties = False
+        for idx,cell in enumerate(group):
+            if prob[idx] == 0:
+                self.set_to_reveal.add(cell.location)
+                group_has_certainties = True
+            if prob[idx] == 1:
+                self.set_to_flag.add(cell.location)
+                group_has_certainties = True
+            # reset all group cells
+            cell.combination_mark = None
+                    
+        # no certainties in group, store least likely mine cell
+        if not group_has_certainties:
+            #group_max_prob_idx = np.argmax(prob)
+            group_min_prob_idx = np.argmin(prob)
+            for idx,cell in enumerate(group):
+                #if idx == group_max_prob_idx:
+                    #g.max_prob = prob[group_max_prob_idx]
+                    #g.max_prob_cell = cell
+                if idx == group_min_prob_idx:
+                    group.min_prob = prob[group_min_prob_idx]
+                    group.min_prob_cell = cell
+                    return
 
     def evaluateCombination(self, group:ContiguousGroup, frontier_cells: List[MSGridElement]):
         for cell in frontier_cells:
+            touching_group = False
             for n in cell.surround:
                 if not n.touched and not n.isEdge:
-                    if n not in group:
-                        return
-
-            numMarkedCells = sum(
-                1 for n in cell.surround if not n.isEdge and n.combination_mark == 1
-            )
-            if numMarkedCells != cell.revealedReducedValue:
-                return False
+                    if n in group:
+                        touching_group = True
+                        break
+            
+            if touching_group:
+                numMarkedCells = sum(
+                    1 for n in cell.surround if not n.isEdge and n.combination_mark == 1
+                )
+                if numMarkedCells != cell.revealedReducedValue:
+                    return False
         return True
 
-    def randomGuess(self, frontier_cells: List[MSGridElement]):
+    def randomGuess(self, cells: List[MSGridElement]):
         return 1
     
     def runGridCleanup(self):
@@ -285,11 +386,6 @@ class MineSolver:
         if ret != 1:
             raise ValueError("Start guess did not succeed.")
         return 1
-
-    # def binary_list(n, k):
-    #     if not (0 <= k < 2 ** n):
-    #         raise ValueError(f"k must be in the range 0 <= k < 2^{n} (got k={k})")
-    #     return [(k >> i) & 1 for i in range(n)]
 
     def binary_mask_arr(n) -> np.array:
         """
