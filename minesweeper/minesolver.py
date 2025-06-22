@@ -236,20 +236,38 @@ class MineSolver:
         self.set_to_reveal.add(cell_to_reveal.location)
 
     def combinationSolve(self, frontier_cells: List[MSGridElement]):
+        self.set_to_flag.clear()
+        self.set_to_reveal.clear()
         groups = self.grid.establishContiguousCells(frontier_cells)
         
+        max_prob = 0
+        max_prob_cell = None
         for g in groups:
             n = len(g)
             n_combs = 2 ** n - 1
             combs = self.binary_mask_arr(n)
-            validCombs = np.array()
+            valid_combs = np.array()
             for comb in combs:
                 for idx,cell in enumerate(g):
                     mark = comb[idx]
                     cell.combination_mark = mark
-                isValid = self.evaluateCombination(g, frontier_cells)
-                if isValid:
-                    validCombs = np.vstack((validCombs,comb))
+                is_valid = self.evaluateCombination(g, frontier_cells)
+                if is_valid:
+                    valid_combs = np.vstack((validCombs,comb))
+            prob = np.divide(np.sum(valid_combs,axis=1),n_combs)
+            for idx,cell in enumerate(g):
+                if prob[idx] == 0:
+                    self.set_to_reveal.add(cell.location)
+                if prob[idx] == 1:
+                    self.set_to_flag.add(cell.location)
+                    
+            # no certanties, work out most likely mine
+            if len(self.set_to_flag) == 0:
+                group_max_prob = np.max(prob)
+                if group_max_prob > max_prob:
+                    max_prob = group_max_prob
+                    # assign cell to flag here
+                
             for cell in g:
                 cell.combination_mark = None     
         return 1
