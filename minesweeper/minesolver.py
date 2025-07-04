@@ -16,10 +16,14 @@ class MineSolverState(Enum):
 
 
 class MineSolver:
-    def __init__(self, grid: MSGrid, debug=False):
+    def __init__(self, grid: MSGrid, debug=False, seed=2468):
         self.grid = grid
         self.nMines = grid.nMines
         self.debug = debug
+        if seed is None:
+            self.rng = np.random.default_rng()
+        else:
+            self.rng = np.random.default_rng(seed=seed)
 
         self.iter_touched_cells, self.iter_mines_remaining = self.getCurrentGridState()
         self.prev_touched_cells = 0
@@ -153,9 +157,10 @@ class MineSolver:
     def solverExecuteSets(self):
         for x, y in self.set_to_flag:
             self.grid.flagCell((x, y), debug=self.debug)
-
         for x, y in self.set_to_reveal:
             self.grid.revealCell((x, y), debug=self.debug)
+        if self.debug:
+            self.grid.print(PrintMode.RevealMines)
 
     def frontierSimpleSolve(self, frontier_cells: List[MSGridElement]):
         for cell in frontier_cells:
@@ -314,17 +319,19 @@ class MineSolver:
         n = len(group)
         n_combs = 2 ** n - 1
         combs = self.binary_mask_arr(n)
-        valid_combs = np.array()
+        valid_combs = np.empty((0, n), dtype=np.int64)
         for comb in combs:
             comb_nMines = np.sum(comb)
             if comb_nMines <= self.iter_mines_remaining:
                 for idx,cell in enumerate(group):
                     mark = comb[idx]
-                    cell.combination_mark = mark
+                    cell.combination_mark = int(mark)
                 is_valid = self.evaluateCombination(group, frontier_cells)
                 if is_valid:
                     valid_combs = np.vstack((valid_combs,comb))
                     group.valid_comb_min_mines = np.min(group.valid_comb_min_mines,comb_nMines)
+        if len(valid_combs) == 0:
+            return
         prob = np.divide(np.sum(valid_combs,axis=1),n_combs)
             
         # assign certainties to be actioned
@@ -370,6 +377,14 @@ class MineSolver:
         return True
 
     def randomGuess(self, cells: List[MSGridElement]):
+        # select random cell
+        rand_cell_idx = self.rng.integers(0,len(cells))
+        # reveal
+        ret = self.grid.revealCell(cells[rand_cell_idx], debug=self.debug)
+        if ret == 1 and self.debug:
+            self.grid.print(PrintMode.RevealMines)
+        elif ret == -1:
+            raise ValueError("Revealed a mine.")
         return 1
     
     def runGridCleanup(self):
@@ -387,7 +402,7 @@ class MineSolver:
             raise ValueError("Start guess did not succeed.")
         return 1
 
-    def binary_mask_arr(n) -> np.array:
+    def binary_mask_arr(self,n) -> np.array:
         """
         Returns a 2D numpy array of shape (2**n, n), where each row is the binary representation
         of k (0 <= k < 2**n), least significant bit first.
@@ -397,18 +412,44 @@ class MineSolver:
 
 if __name__ == "__main__":
     # Example usage
-    grid = MSGrid(20, 8, nMines=40)
+
+    grid = MSGrid(20, 8, nMines=28, seed=100)
     grid.instantiateGrid()
     solver = MineSolver(grid, debug=False)
 
     # Print the formatted cell
-    # grid.print(PrintMode.RevealAll)
-    # print()
-    grid.print(PrintMode.RevealMines)
+    grid.print(PrintMode.RevealAll)
     print()
-    # solver.solverIteration()
+    grid.print(PrintMode.Normal)
+    grid.revealCell((0, 0))
+    # grid.print()
+    grid.revealCell((6, 7))
+    grid.revealCell((8, 4))
+    grid.revealCell((11, 5))
+    grid.revealCell((13, 5))
+    grid.revealCell((13, 7))
+    grid.print(PrintMode.RevealMines)
+
+    grid.establishContiguousCells()
+    iter_frontier_cells = grid.getFrontierCells()
+    solver.iter_touched_cells, solver.iter_mines_remaining = solver.getCurrentGridState()
+    
+    solver.combinationSolve(iter_frontier_cells)
+    
+    grid.print(PrintMode.RevealMines, show_groups=True)
+
+
+    # grid = MSGrid(20, 8, nMines=40)
+    # grid.instantiateGrid()
+
+    # # Print the formatted cell
+    # # grid.print(PrintMode.RevealAll)
+    # # print()
     # grid.print(PrintMode.RevealMines)
-    solver.solve(
-        print_mode=PrintMode.RevealMines,
-    )
-    print(solver.n_iterations)
+    # print()
+    # # solver.solverIteration()
+    # # grid.print(PrintMode.RevealMines)
+    # solver.solve(
+    #     print_mode=PrintMode.RevealMines,
+    # )
+    # print(solver.n_iterations)

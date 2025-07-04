@@ -113,7 +113,7 @@ class ContiguousGroup(set):
         self.min_prob = 1
         self.max_prob_cell = None
         self.min_prob_cell = None
-        self.valid_comb_min_mines = np.inf()
+        self.valid_comb_min_mines = np.inf
 
     def setID(self, id):
         self.id = id
@@ -142,10 +142,12 @@ class ContiguousGroup(set):
 class MSGrid(Grid):
     nMines = 0
 
-    def __init__(self, nX, nY, seed=1234, nMines=1):
+    def __init__(self, nX, nY, seed=100, nMines=1):
         super().__init__(nX, nY)
-        self.seed = seed
-        np.random.seed(seed)
+        if seed is None:
+            self.rng = np.random.default_rng()
+        else:
+            self.rng = np.random.default_rng(seed=seed)
         self.nMines = nMines
         self.mine_positions = set()
         self.state = MSGridState.UNINITIALIZED
@@ -190,8 +192,8 @@ class MSGrid(Grid):
 
         self.mine_positions.clear()
         while len(self.mine_positions) < self.nMines:
-            x = np.random.randint(0, self.nX)
-            y = np.random.randint(0, self.nY)
+            x = self.rng.integers(0, self.nX)
+            y = self.rng.integers(0, self.nY)
             self.mine_positions.add((x, y))
 
     def revealCell(self, pos: tuple, debug=False):
@@ -289,7 +291,7 @@ class MSGrid(Grid):
                     s.group_id for s in n.untouchedNeighbors() if s.group_id is not None
                 }
                 if len(touchingGroups) == 0:
-                    # no neighbouring groups, create a group
+                    # no neighboring groups, create a group
                     g = self.createGroup()
                     g.add(n)
                 elif len(touchingGroups) == 1:
@@ -407,7 +409,7 @@ class MSGrid(Grid):
 
 if __name__ == "__main__":
     # Example usage
-    grid = MSGrid(20, 8, nMines=40)
+    grid = MSGrid(20, 8, nMines=28, seed=100)
     grid.instantiateGrid()
 
     # Print the formatted cell
@@ -415,14 +417,14 @@ if __name__ == "__main__":
     print()
     grid.print(PrintMode.Normal)
     grid.revealCell((0, 0))
-    # print(grid.flagCell((2, 3)))
-    # print(grid.flagCell((2, 4)))
     # grid.print()
-    grid.revealCell((7, 2))
-    grid.revealCell((8, 5))
-    grid.revealCell((8, 7))
+    grid.revealCell((6, 7))
+    grid.revealCell((8, 4))
+    grid.revealCell((11, 5))
+    grid.revealCell((13, 5))
+    grid.revealCell((13, 7))
     grid.print(PrintMode.RevealMines)
 
-    grid.createContiguousTargets()
+    grid.establishContiguousCells()
 
     grid.print(PrintMode.RevealMines, show_groups=True)
