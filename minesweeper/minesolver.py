@@ -83,7 +83,7 @@ class MineSolver:
         elif (
             self.state == MineSolverState.FRONTIER_SIMPLE_SOLVE
             or self.state == MineSolverState.FRONTIER_PATTERN_SOLVE
-            or self.state == MineSolverState.COMBINATION_S
+            or self.state == MineSolverState.COMBINATION_SOLVE
         ):
             iter_frontier_cells = self.grid.getFrontierCells()
 
@@ -240,6 +240,8 @@ class MineSolver:
             return
 
         # the cell in that cardinal direction must have a value of 1
+        if cell.surround[side_idx + 2 * direction].isEdge:
+            return
         if cell.surround[side_idx + 2 * direction].revealedReducedValue != 1:
             return
 
@@ -261,10 +263,15 @@ class MineSolver:
         self.set_to_flag.clear()
         self.set_to_reveal.clear()
         groups = self.grid.establishContiguousCells(frontier_cells)
-        
+        self.grid.print(PrintMode.RevealMines, show_groups=True)
+
         for g in groups:
             if g.max_prob_cell is None:
-                self.calculateGroupProbabilities(g,frontier_cells)
+                if len(g) < 13:
+                    # limit probability calculation for group size
+                    # - if its this bad then just random guess
+                    if len(self.set_to_flag) == 0 and len(self.set_to_reveal) == 0:
+                        self.calculateGroupProbabilities(g,frontier_cells)
             
         # no certainties in all groups, pick best option
         if len(self.set_to_flag) == 0 and len(self.set_to_reveal) == 0:
@@ -329,11 +336,12 @@ class MineSolver:
                 is_valid = self.evaluateCombination(group, frontier_cells)
                 if is_valid:
                     valid_combs = np.vstack((valid_combs,comb))
-                    group.valid_comb_min_mines = np.min(group.valid_comb_min_mines,comb_nMines)
-        if len(valid_combs) == 0:
+                    group.valid_comb_min_mines = np.min((group.valid_comb_min_mines,comb_nMines))
+        n_valid_combs = len(valid_combs)
+        if n_valid_combs == 0:
             return
-        prob = np.divide(np.sum(valid_combs,axis=1),n_combs)
-            
+        prob = np.divide(np.sum(valid_combs,axis=0),n_valid_combs)
+
         # assign certainties to be actioned
         group_has_certainties = False
         for idx,cell in enumerate(group):
@@ -359,7 +367,7 @@ class MineSolver:
                     group.min_prob_cell = cell
                     return
 
-    def evaluateCombination(self, group:ContiguousGroup, frontier_cells: List[MSGridElement]):
+    def evaluateCombination(self, group:ContiguousGroup, frontier_cells: List[MSGridElement]) -> bool:
         for cell in frontier_cells:
             touching_group = False
             for n in cell.surround:
@@ -369,10 +377,19 @@ class MineSolver:
                         break
             
             if touching_group:
+                numTouchingOtherGroup = sum(
+                    1 for n in cell.surround if not n.isEdge and not n.touched and group.id != n.group_id
+                )
+                if numTouchingOtherGroup > 0:
+                    x=1
                 numMarkedCells = sum(
                     1 for n in cell.surround if not n.isEdge and n.combination_mark == 1
                 )
-                if numMarkedCells != cell.revealedReducedValue:
+                # current logic may ignore valid group combinations when there are frontier
+                # cells touching another group
+                conservativeValue = np.max((cell.revealedReducedValue - numTouchingOtherGroup, 1))
+                conservativeNumMarked = numMarkedCells + numTouchingOtherGroup
+                if conservativeNumMarked != conservativeValue:
                     return False
         return True
 
@@ -411,45 +428,19 @@ class MineSolver:
 
 
 if __name__ == "__main__":
-    # Example usage
-
     grid = MSGrid(20, 8, nMines=28, seed=100)
     grid.instantiateGrid()
     solver = MineSolver(grid, debug=False)
 
     # Print the formatted cell
     grid.print(PrintMode.RevealAll)
-    print()
-    grid.print(PrintMode.Normal)
-    grid.revealCell((0, 0))
-    # grid.print()
-    grid.revealCell((6, 7))
-    grid.revealCell((8, 4))
-    grid.revealCell((11, 5))
-    grid.revealCell((13, 5))
-    grid.revealCell((13, 7))
+
     grid.print(PrintMode.RevealMines)
 
-    grid.establishContiguousCells()
-    iter_frontier_cells = grid.getFrontierCells()
-    solver.iter_touched_cells, solver.iter_mines_remaining = solver.getCurrentGridState()
-    
-    solver.combinationSolve(iter_frontier_cells)
-    
+    # solver.solve(until_state=MineSolverState.COMBINATION_SOLVE)
+    solver.solve()
     grid.print(PrintMode.RevealMines, show_groups=True)
 
+    solver.solve()
 
-    # grid = MSGrid(20, 8, nMines=40)
-    # grid.instantiateGrid()
-
-    # # Print the formatted cell
-    # # grid.print(PrintMode.RevealAll)
-    # # print()
-    # grid.print(PrintMode.RevealMines)
-    # print()
-    # # solver.solverIteration()
-    # # grid.print(PrintMode.RevealMines)
-    # solver.solve(
-    #     print_mode=PrintMode.RevealMines,
-    # )
-    # print(solver.n_iterations)
+    grid.print(PrintMode.RevealMines)

@@ -273,7 +273,7 @@ class MSGrid(Grid):
             frontier_cells = self.getFrontierCells()
 
         for cell in frontier_cells:
-            potential_targets = cell.untouchedNeighbors()
+            potential_targets = cell.unrevealedNeighbors()
             for n in potential_targets:
                 g_id = n.group_id
 
@@ -288,7 +288,7 @@ class MSGrid(Grid):
 
                 # no group, look around
                 touchingGroups = {
-                    s.group_id for s in n.untouchedNeighbors() if s.group_id is not None
+                    s.group_id for s in n.unrevealedNeighbors() if s.group_id is not None
                 }
                 if len(touchingGroups) == 0:
                     # no neighboring groups, create a group
@@ -303,8 +303,18 @@ class MSGrid(Grid):
                     g = self.joinGroups(touchingGroups)
                     g.add(n)
 
+        self.cleanupGroups()
         self.cleanupInvalidGroups()
         return self.groups
+
+    def cleanupGroups(self):
+        for g in self.groups:
+            badCells = set()
+            for cell in g:
+                if cell.flagged:
+                    badCells.add(cell)
+            for cell in badCells:
+                g.remove(cell)
 
     def getValidGroupIDs(self) -> list:
         if len(self.groups) == 0:
@@ -355,7 +365,12 @@ class MSGrid(Grid):
                             str(cell.value), bold=True, fg_rgb=TXT_COL[str(cell.value)]
                         )
             else:
-                styled_out = print_styled(" ", bold=True, bg_rgb=COL_MAP["gray"])
+                if cell.combination_mark == 1:
+                    styled_out = print_styled("M", bold=True, bg_rgb=COL_MAP["gray"])
+                elif cell.combination_mark == 0:
+                    styled_out = print_styled("-", bold=True, bg_rgb=COL_MAP["gray"])
+                else:
+                    styled_out = print_styled(" ", bg_rgb=COL_MAP["gray"])
         elif print_mode == PrintMode.RevealMines:
             if cell.is_mine:
                 if cell.flagged:
@@ -366,7 +381,12 @@ class MSGrid(Grid):
                             f"{cell.group_id}", bold=True, bg_rgb=COL_MAP["red"]
                         )
                     else:
-                        styled_out = print_styled(" ", bold=True, bg_rgb=COL_MAP["red"])
+                        if cell.combination_mark == 1:
+                            styled_out = print_styled("M", bold=True, bg_rgb=COL_MAP["red"])
+                        elif cell.combination_mark == 0:
+                            styled_out = print_styled("-", bold=True, bg_rgb=COL_MAP["red"])
+                        else:
+                            styled_out = print_styled(" ", bg_rgb=COL_MAP["red"])
             else:
                 if cell.flagged:
                     styled_out = print_styled("X", bold=True, bg_rgb=COL_MAP["yellow"])
@@ -383,9 +403,12 @@ class MSGrid(Grid):
                             f"{cell.group_id}", bold=True, bg_rgb=COL_MAP["gray"]
                         )
                     else:
-                        styled_out = print_styled(
-                            " ", bold=True, bg_rgb=COL_MAP["gray"]
-                        )
+                        if cell.combination_mark == 1:
+                            styled_out = print_styled("M", bold=True, bg_rgb=COL_MAP["gray"])
+                        elif cell.combination_mark == 0:
+                            styled_out = print_styled("-", bold=True, bg_rgb=COL_MAP["gray"])
+                        else:
+                            styled_out = print_styled(" ", bg_rgb=COL_MAP["gray"])
         elif print_mode == PrintMode.RevealAll:
             if cell.is_mine:
                 if cell.flagged:
