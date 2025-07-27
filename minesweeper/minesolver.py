@@ -22,6 +22,7 @@ class MineSolver:
         self.debug = debug
         if seed is None:
             self.rng = np.random.default_rng()
+            print(self.rng)
         else:
             self.rng = np.random.default_rng(seed=seed)
 
@@ -232,9 +233,9 @@ class MineSolver:
         side_idx = unrevealed_cells.index(1) * 2
 
         # check there is exactly 1 unrevealed either side
-        if not cell.surround[side_idx + 1].touched:
+        if not cell.surround[side_idx + 1].touched and not cell.surround[side_idx + 1].isEdge:
             direction = 1
-        elif not cell.surround[side_idx - 1].touched:
+        elif not cell.surround[side_idx - 1].touched and not cell.surround[side_idx - 1].isEdge:
             direction = -1
         else:
             return
@@ -428,17 +429,19 @@ class MineSolver:
 
 
 if __name__ == "__main__":
-    grid = MSGrid(20, 8, nMines=28, seed=100)
+    seed = np.random.randint(99999)
+    print(f"Seed = {seed}")
+    grid = MSGrid(20, 8, nMines=28, seed=None)
     grid.instantiateGrid()
     solver = MineSolver(grid, debug=False)
 
     # Print the formatted cell
-    grid.print(PrintMode.RevealAll)
+    # grid.print(PrintMode.RevealAll)
 
     grid.print(PrintMode.RevealMines)
 
-    # solver.solve(until_state=MineSolverState.COMBINATION_SOLVE)
-    solver.solve()
+    solver.solve(until_state=MineSolverState.COMBINATION_SOLVE)
+    # solver.solve()
     grid.print(PrintMode.RevealMines, show_groups=True)
 
     solver.solve()
