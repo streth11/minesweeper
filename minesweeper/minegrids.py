@@ -81,7 +81,7 @@ class MSGridElement(GridElement):
 
     def numUntouchedNeighbors(self):
         """Count the number of neighbors that are neither revealed nor flagged."""
-        return sum(self.untouchedNeighbors())
+        return len(self.untouchedNeighbors())
 
     def untouchedNeighbors(self):
         """Return a list of neighbors that are neither revealed nor flagged."""
@@ -208,7 +208,9 @@ class MSGrid(Grid):
             self.state = MSGridState.FAILED
             return -1
         self[x, y].runRecursiveReveal(debug=debug)
-        if self.numMinesRemaining(truth=True) == 0:
+        # if self.numMinesRemaining(truth=True) == 0:
+        #     self.state = MSGridState.SOLVED
+        if self.numTouchedCells == self.n - self.nMines:
             self.state = MSGridState.SOLVED
         return 1
 

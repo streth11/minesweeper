@@ -11,7 +11,7 @@ class MineSolverState(Enum):
     FRONTIER_PATTERN_SOLVE = 2
     COMBINATION_SOLVE = 3
     RANDOM_GUESS = 4
-    CLEANUP = 5
+    AWAITING_EVAL = 5
     COMPLETE = 6
 
 
@@ -24,6 +24,7 @@ class MineSolver:
             self.rng = np.random.default_rng()
         else:
             self.rng = np.random.default_rng(seed=seed)
+        self.stop_at_stalemate = False
 
         self.iter_touched_cells, self.iter_mines_remaining = self.getCurrentGridState()
         self.prev_touched_cells = 0
@@ -31,20 +32,24 @@ class MineSolver:
 
         self.state = MineSolverState.START
         self.n_iterations = 0
+        self.game_over = 0
 
         self.set_to_flag = set()
         self.set_to_reveal = set()
         self.cells_to_guess = []
 
-    def solve(self, until_state=MineSolverState.COMPLETE, print_mode=PrintMode.NoPrint):
-        game_over = 0
-        while game_over == 0:
-            game_over = self.solverIteration()
+    def solve(self, until_state=MineSolverState.COMPLETE, print_mode=PrintMode.NoPrint, stop_at_stalemate=False):
+        if stop_at_stalemate:
+            self.stop_at_stalemate = stop_at_stalemate
+            until_state = min(MineSolverState.RANDOM_GUESS, until_state)
+
+        while self.game_over == 0:
+            self.game_over = self.solverIteration()
             if print_mode != PrintMode.NoPrint:
                 self.grid.print(print_mode)
             if self.state == until_state:
                 break
-        return game_over, self.n_iterations
+        return self.game_over, self.n_iterations
 
     def solverIteration(self):
         self.state = self.runSolverStateMachine()
@@ -66,90 +71,55 @@ class MineSolver:
             raise ValueError(f"Bad grid state: {self.grid.state}")
 
     def runSolverStateMachine(self) -> MineSolverState:
+        # Handle START state
         if self.state == MineSolverState.START:
             if self.iter_touched_cells != 0:
                 raise ValueError("Solver started with non-zero touched cells.")
             ret = self.startGuess()
-
-            self.iter_touched_cells, self.iter_mines_remaining = (
-                self.getCurrentGridState()
-            )
+            self.iter_touched_cells, self.iter_mines_remaining = self.getCurrentGridState()
             if ret is None:
                 raise ValueError("Start guess returned None.")
             return MineSolverState.FRONTIER_SIMPLE_SOLVE
-        elif self.iter_mines_remaining == 0:
+
+        # Handle CLEANUP state
+        if self.iter_mines_remaining == 0:
             self.runGridCleanup()
-            return MineSolverState.CLEANUP
-        elif (
-            self.state == MineSolverState.FRONTIER_SIMPLE_SOLVE
-            or self.state == MineSolverState.FRONTIER_PATTERN_SOLVE
-            or self.state == MineSolverState.COMBINATION_SOLVE
-        ):
+            return MineSolverState.AWAITING_EVAL
+
+        # Map states to their corresponding methods
+        state_methods = {
+            MineSolverState.FRONTIER_SIMPLE_SOLVE: self.frontierSimpleSolve,
+            MineSolverState.FRONTIER_PATTERN_SOLVE: self.frontierPatternSolve,
+            MineSolverState.COMBINATION_SOLVE: self.combinationSolve,
+            MineSolverState.RANDOM_GUESS: self.frontierRandomGuess,
+        }
+
+        # If in a frontier state, get frontier cells and call the appropriate method
+        if self.state in state_methods:
             iter_frontier_cells = self.grid.getFrontierCells()
-
-        if self.state == MineSolverState.FRONTIER_SIMPLE_SOLVE:
-            # execute frontier simple solve
-            ret = self.frontierSimpleSolve(iter_frontier_cells)
+            ret = state_methods[self.state](iter_frontier_cells)
             if ret is None:
-                raise ValueError("Frontier simple solve returned None.")
+                raise ValueError(f"{self.state.name} returned None.")
 
-            # see what has changed
-            self.iter_touched_cells, self.iter_mines_remaining = (
-                self.getCurrentGridState()
-            )
-            # update state based on touched cells
+            self.iter_touched_cells, self.iter_mines_remaining = self.getCurrentGridState()
+
+            # State transitions
+            state_transitions = {
+                MineSolverState.FRONTIER_SIMPLE_SOLVE: MineSolverState.FRONTIER_PATTERN_SOLVE,
+                MineSolverState.FRONTIER_PATTERN_SOLVE: MineSolverState.COMBINATION_SOLVE,
+                MineSolverState.COMBINATION_SOLVE: MineSolverState.RANDOM_GUESS,
+                MineSolverState.RANDOM_GUESS: MineSolverState.AWAITING_EVAL,
+            }
+
             if self.prev_touched_cells == self.iter_touched_cells:
-                return MineSolverState.FRONTIER_PATTERN_SOLVE
+                # Special case for RANDOM_GUESS: set grid state to STALEMATE
+                if self.state == MineSolverState.RANDOM_GUESS:
+                    self.grid.state = MSGridState.STALEMATE
+                return state_transitions[self.state]
             return MineSolverState.FRONTIER_SIMPLE_SOLVE
 
-        elif self.state == MineSolverState.FRONTIER_PATTERN_SOLVE:
-            # execute frontier pattern solve
-            ret = self.frontierPatternSolve(iter_frontier_cells)
-            if ret is None:
-                raise ValueError("Frontier pattern solve returned None.")
+        raise ValueError(f"Unknown state: {self.state}")
 
-            # see what has changed
-            self.iter_touched_cells, self.iter_mines_remaining = (
-                self.getCurrentGridState()
-            )
-            # update state based on touched cells
-            if self.prev_touched_cells == self.iter_touched_cells:
-                return MineSolverState.COMBINATION_SOLVE
-            return MineSolverState.FRONTIER_SIMPLE_SOLVE
-
-        elif self.state == MineSolverState.COMBINATION_SOLVE:
-            # execute combination solve
-            ret = self.combinationSolve(iter_frontier_cells)
-            if ret is None:
-                raise ValueError("Frontier pattern solve returned None.")
-
-            # see what has changed
-            self.iter_touched_cells, self.iter_mines_remaining = (
-                self.getCurrentGridState()
-            )
-            # update state based on touched cells
-            if self.prev_touched_cells == self.iter_touched_cells:
-                return MineSolverState.RANDOM_GUESS
-            return MineSolverState.FRONTIER_SIMPLE_SOLVE
-
-        elif self.state == MineSolverState.RANDOM_GUESS:
-            # execute random guess
-            ret = self.randomGuess()
-            if ret is None:
-                raise ValueError("Random guess returned None.")
-
-            self.iter_touched_cells, self.iter_mines_remaining = (
-                self.getCurrentGridState()
-            )
-
-            # update state based on touched cells
-            if self.prev_touched_cells == self.iter_touched_cells:
-                self.grid.state = MSGridState.STALEMATE
-                return MineSolverState.COMPLETE
-            return MineSolverState.FRONTIER_SIMPLE_SOLVE
-
-        else:
-            raise ValueError(f"Unknown state: {self.state}")
 
     def getCurrentGridState(self):
         return self.grid.numTouchedCells, self.grid.numMinesRemaining()
@@ -264,6 +234,7 @@ class MineSolver:
         self.set_to_reveal.clear()
         groups = self.grid.establishContiguousCells(frontier_cells)
         self.grid.print(PrintMode.RevealMines, show_groups=True)
+        any_probability_calculated = False
 
         for g in groups:
             if g.max_prob_cell is None:
@@ -272,9 +243,10 @@ class MineSolver:
                     # - if its this bad then just random guess
                     if len(self.set_to_flag) == 0 and len(self.set_to_reveal) == 0:
                         self.calculateGroupProbabilities(g,frontier_cells)
+                        any_probability_calculated = True
             
         # no certainties in all groups, pick best option
-        if len(self.set_to_flag) == 0 and len(self.set_to_reveal) == 0:
+        if len(self.set_to_flag) == 0 and len(self.set_to_reveal) == 0 and any_probability_calculated:
             
             groups_worst_case_nMines = sum([g.valid_comb_min_mines for g in groups])
             pred_ungrouped_mines = self.iter_mines_remaining - groups_worst_case_nMines
@@ -393,11 +365,39 @@ class MineSolver:
                     return False
         return True
 
-    def randomGuess(self, cells: List[MSGridElement]):
+    def frontierRandomGuess(self, frontier_cells: List[MSGridElement]):
+        if self.stop_at_stalemate:
+            return 1
+        
+        local_neighbor_prob = [np.divide(cell.revealedReducedValue, cell.numUntouchedNeighbors()) for cell in frontier_cells]
+        global_prob = np.divide(self.grid.n-self.grid.numTouchedCells,self.grid.numMinesRemaining())
+
+        # Find the minimum local probability
+        min_local_prob = np.min(local_neighbor_prob)
+        min_indices = [i for i, prob in enumerate(local_neighbor_prob) if prob == min_local_prob]
+
+        if min_local_prob < global_prob:
+            # Randomly select one of the cells with the lowest local probability
+            cell_to_reveal = frontier_cells[self.rng.choice(min_indices)]
+        else:
+            # Randomly select an untouched cell
+            untouchedList = self.grid.untouchedListFlattened()
+            cell_to_reveal = untouchedList[self.randomGuess(self, untouchedList, return_only = True)]
+        
+        ret = self.grid.revealCell(cell_to_reveal.location, debug=self.debug)
+        if ret == 1 and self.debug:
+            self.grid.print(PrintMode.RevealMines)
+        elif ret == -1:
+            raise ValueError("Revealed a mine.")
+        return 1
+
+    def randomGuess(self, cells: List[MSGridElement], return_only = False):
         # select random cell
         rand_cell_idx = self.rng.integers(0,len(cells))
+        if return_only:
+            return rand_cell_idx
         # reveal
-        ret = self.grid.revealCell(cells[rand_cell_idx], debug=self.debug)
+        ret = self.grid.revealCell(cells[rand_cell_idx].location, debug=self.debug)
         if ret == 1 and self.debug:
             self.grid.print(PrintMode.RevealMines)
         elif ret == -1:
@@ -428,7 +428,7 @@ class MineSolver:
 
 
 if __name__ == "__main__":
-    grid = MSGrid(20, 8, nMines=28, seed=100)
+    grid = MSGrid(20, 9, nMines=28, seed=100)
     grid.instantiateGrid()
     solver = MineSolver(grid, debug=False)
 
