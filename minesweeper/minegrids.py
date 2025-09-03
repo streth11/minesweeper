@@ -354,6 +354,8 @@ class MSGrid(Grid):
         print_mode: PrintMode = PrintMode.Normal,
         show_groups=False,
     ):
+        if self.state == MSGridState.UNINITIALIZED:
+            return " - "
         """Returns a formatted string for the cell based on the print mode."""
         if print_mode == PrintMode.Normal:
             if cell.touched:

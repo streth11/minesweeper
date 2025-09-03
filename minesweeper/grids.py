@@ -127,10 +127,10 @@ class Grid:
         self.nX = nX
         self.nY = nY
         self.n = self.nX * self.nY
+        self.grid = np.empty((self.nX, self.nY), dtype=object)
 
     def instantiateGrid(self, GridElemType=GridElement, EdgeElementType=EdgeElement, *args):
         """Instantiates the grid with GridElemType elements."""
-        self.grid = np.empty((self.nX, self.nY), dtype=object)
 
         for i in range(self.nX):
             for j in range(self.nY):

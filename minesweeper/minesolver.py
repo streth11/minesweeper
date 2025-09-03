@@ -43,6 +43,11 @@ class MineSolver:
         if stop_at_stalemate:
             self.stop_at_stalemate = stop_at_stalemate
             until_state = min(MineSolverState.RANDOM_GUESS, until_state)
+        
+        if grid.state == MSGridState.UNINITIALIZED:
+            print("Grid uninitialised, initialising...")
+            self.grid.instantiateGrid()
+            self.iter_touched_cells, self.iter_mines_remaining = self.getCurrentGridState()
 
         while self.game_over == 0:
             self.game_over = self.solverIteration()
@@ -121,8 +126,9 @@ class MineSolver:
 
         raise ValueError(f"Unknown state: {self.state}")
 
-
     def getCurrentGridState(self):
+        if grid.state == MSGridState.UNINITIALIZED:
+            return 0,0
         return self.grid.numTouchedCells, self.grid.numMinesRemaining()
 
     def solverExecuteSets(self):
@@ -380,9 +386,11 @@ class MineSolver:
         if min_local_prob <= global_prob:
             # Randomly select one of the cells with the lowest local probability
             guess_candidate_list = frontier_cells[self.rng.choice(min_indices)].untouchedNeighbors()
+            print('Randomly Guessing from frontier')
         else:
             # Randomly select an untouched cell
             guess_candidate_list = self.grid.untouchedListFlattened()
+            print('Randomly Guessing from anywhere')
 
         cell_to_reveal = guess_candidate_list[self.randomGuess(guess_candidate_list, return_only = True)]
 
@@ -431,16 +439,18 @@ class MineSolver:
 
 if __name__ == "__main__":
     seed = np.random.randint(99999)
-
+    seed = 80546
     print(f"Seed = {seed}")
 
-    grid = MSGrid(20, 9, nMines=28, seed=100)
-
-    grid.instantiateGrid()
-    solver = MineSolver(grid, debug=False, seed=2468)
+    grid = MSGrid(20, 9, nMines=28, seed=seed)
 
     # grid.print(PrintMode.RevealAll)
-    grid.print(PrintMode.RevealMines)
+
+    solver = MineSolver(grid, debug=False, seed=seed)
+    # grid.instantiateGrid()
+
+    grid.print(PrintMode.RevealAll)
+    # grid.print(PrintMode.RevealMines)
     # solver.solve(until_state=MineSolverState.COMBINATION_SOLVE)
     result,nIter = solver.solve()
     grid.print(PrintMode.Normal)
