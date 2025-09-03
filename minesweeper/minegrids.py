@@ -210,7 +210,7 @@ class MSGrid(Grid):
         self[x, y].runRecursiveReveal(debug=debug)
         # if self.numMinesRemaining(truth=True) == 0:
         #     self.state = MSGridState.SOLVED
-        if self.numTouchedCells == self.n - self.nMines:
+        if self.numRevealedCells == self.n - self.nMines:
             self.state = MSGridState.SOLVED
         return 1
 

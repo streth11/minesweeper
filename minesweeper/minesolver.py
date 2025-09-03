@@ -234,7 +234,7 @@ class MineSolver:
         self.set_to_flag.clear()
         self.set_to_reveal.clear()
         groups = self.grid.establishContiguousCells(frontier_cells)
-        self.grid.print(PrintMode.RevealMines, show_groups=True)
+        # self.grid.print(PrintMode.RevealMines, show_groups=True)
         any_probability_calculated = False
 
         for g in groups:
@@ -371,26 +371,27 @@ class MineSolver:
             return 1
         
         local_neighbor_prob = [np.divide(cell.revealedReducedValue, cell.numUntouchedNeighbors()) for cell in frontier_cells]
-        global_prob = np.divide(self.grid.n-self.grid.numTouchedCells,self.grid.numMinesRemaining())
+        global_prob = np.divide(self.grid.numMinesRemaining(),self.grid.n-self.grid.numTouchedCells)
 
         # Find the minimum local probability
         min_local_prob = np.min(local_neighbor_prob)
         min_indices = [i for i, prob in enumerate(local_neighbor_prob) if prob == min_local_prob]
 
-        if min_local_prob < global_prob:
+        if min_local_prob <= global_prob:
             # Randomly select one of the cells with the lowest local probability
-            cell_to_reveal = frontier_cells[self.rng.choice(min_indices)]
+            guess_candidate_list = frontier_cells[self.rng.choice(min_indices)].untouchedNeighbors()
         else:
             # Randomly select an untouched cell
-            untouchedList = self.grid.untouchedListFlattened()
-            cell_to_reveal = untouchedList[self.randomGuess(self, untouchedList, return_only = True)]
-        
+            guess_candidate_list = self.grid.untouchedListFlattened()
+
+        cell_to_reveal = guess_candidate_list[self.randomGuess(guess_candidate_list, return_only = True)]
+
         ret = self.grid.revealCell(cell_to_reveal.location, debug=self.debug)
         if ret == 1 and self.debug:
             self.grid.print(PrintMode.RevealMines)
         elif ret == -1:
-            raise ValueError("Revealed a mine.")
-        return 1
+            print("Random Guess Revealed a mine.")
+        return ret
 
     def randomGuess(self, cells: List[MSGridElement], return_only = False):
         # select random cell
@@ -402,8 +403,8 @@ class MineSolver:
         if ret == 1 and self.debug:
             self.grid.print(PrintMode.RevealMines)
         elif ret == -1:
-            raise ValueError("Revealed a mine.")
-        return 1
+            print("Random Guess Revealed a mine.")
+        return ret
     
     def runGridCleanup(self):
         for cell in self.grid.untouchedListFlattened():
@@ -429,24 +430,22 @@ class MineSolver:
 
 
 if __name__ == "__main__":
-    # seed = np.random.randint(99999)
-    # print(f"Seed = {seed}")
-    # grid = MSGrid(20, 9, nMines=28, seed=None)
+    seed = np.random.randint(99999)
+
+    print(f"Seed = {seed}")
+
     grid = MSGrid(20, 9, nMines=28, seed=100)
 
     grid.instantiateGrid()
-    solver = MineSolver(grid, debug=False)
+    solver = MineSolver(grid, debug=False, seed=2468)
 
-    # Print the formatted cell
-    grid.print(PrintMode.RevealAll)
-
+    # grid.print(PrintMode.RevealAll)
     grid.print(PrintMode.RevealMines)
-
     # solver.solve(until_state=MineSolverState.COMBINATION_SOLVE)
-    solver.solve()
-    grid.print(PrintMode.RevealMines, show_groups=True)
+    result,nIter = solver.solve()
+    grid.print(PrintMode.Normal)
 
-    # solver.solve()
-
-    grid.print(PrintMode.RevealMines)
-
+    if result == 1:
+        print(f'Solve Successful in {nIter} iterations')
+    elif result == -1:
+        print(f'Solve Unsuccessful in {nIter} iterations')
