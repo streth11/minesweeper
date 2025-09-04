@@ -132,6 +132,8 @@ class ContiguousGroup(set):
     def remove(self, cell: MSGridElement):
         cell.group_id = None
         super().remove(cell)
+        if self.__len__() == 0:
+            self.invalidate()
 
     def pushGroupIDs(self):
         if self.valid:
