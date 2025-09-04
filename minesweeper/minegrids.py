@@ -107,11 +107,9 @@ class ContiguousGroup(set):
         self.valid = False
         self.id = -1
         self.initStats()
-        
+
     def initStats(self):
-        self.max_prob = 0
         self.min_prob = 1
-        self.max_prob_cell = None
         self.min_prob_cell = None
         self.valid_comb_min_mines = np.inf
 
@@ -259,9 +257,7 @@ class MSGrid(Grid):
 
     def revealedWithUnrevealedNeighbors(self):
         return [
-            cell
-            for cell in self.grid.flat
-            if cell.revealed and cell.hasUntouchedNeighbors()
+            cell for cell in self.grid.flat if cell.revealed and cell.hasUntouchedNeighbors()
         ]
 
     def getFrontierCells(self):
@@ -272,7 +268,9 @@ class MSGrid(Grid):
             return self.untouchedListFlattened()
         return [cell for cell in self.grid.flat if not cell.touched and cell.group_id is None]
 
-    def establishContiguousCells(self, frontier_cells: List[MSGridElement] = None) -> List[ContiguousGroup]:
+    def establishContiguousCells(
+        self, frontier_cells: List[MSGridElement] = None
+    ) -> List[ContiguousGroup]:
         if frontier_cells is None:
             frontier_cells = self.getFrontierCells()
 
@@ -313,12 +311,9 @@ class MSGrid(Grid):
 
     def cleanupGroups(self):
         for g in self.groups:
-            badCells = set()
-            for cell in g:
+            for cell in list(g):
                 if cell.flagged:
-                    badCells.add(cell)
-            for cell in badCells:
-                g.remove(cell)
+                    g.remove(cell)
 
     def getValidGroupIDs(self) -> list:
         if len(self.groups) == 0:
